@@ -1,7 +1,11 @@
-"""第一阶段演示入口：摄像头实时 Pose 检测。
+"""演示入口：摄像头实时 Pose 检测 + 人物进出检测。
 
-只做一件事：把摄像头画面 + 人体骨架 + person_detected 状态实时显示出来。
-本文件只负责「串流程」（组装 camera / detector / visualizer），
+做两件事：
+1. 把摄像头画面 + 人体骨架 + person_detected 状态实时显示出来（第一阶段）。
+2. 把每帧的 person_detected 喂给 PresenceDetector，在终端打印
+   [Presence] PERSON_ENTER / PERSON_LEFT / PERSON_RETURNED（第二阶段）。
+
+本文件只负责「串流程」（组装 camera / detector / presence / visualizer），
 不堆放具体算法实现，方便后续接桌宠前端时替换显示层。
 
 运行：
@@ -20,6 +24,7 @@ import cv2
 
 from .camera import CameraStream
 from .pose_detector import DEFAULT_MODEL_PATH, NUM_LANDMARKS, PoseDetector
+from .presence_detector import PresenceDetector
 from .visualizer import draw_pose_debug
 
 WINDOW_NAME = "DeskPet Vision - Phase 1 Pose"
@@ -27,7 +32,7 @@ WINDOW_NAME = "DeskPet Vision - Phase 1 Pose"
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="摄像头实时人体姿态检测（第一阶段调试用）",
+        description="摄像头实时人体姿态检测 + 人物进出检测（调试用）",
     )
     parser.add_argument("--camera", type=int, default=0, help="摄像头编号，默认 0")
     parser.add_argument("--width", type=int, default=640, help="画面宽度，默认 640")
@@ -63,6 +68,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="在画面上的每个关键点旁标注名字（很乱，仅排查用）",
     )
+    # -- 第二阶段：人物进出检测的参数 --------------------------------------
+    parser.add_argument(
+        "--stable-frames",
+        type=int,
+        default=8,
+        help="连续多少帧检测到人才算「真的来了」，默认 8（防抖，约 0.27s@30fps）",
+    )
+    parser.add_argument(
+        "--absent-timeout",
+        type=float,
+        default=2.0,
+        help="连续丢失多少秒才算「真的走了」，默认 2.0 秒",
+    )
     return parser.parse_args(argv)
 
 
@@ -74,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  模型      : {args.model}")
     print(f"  关键点数量: {NUM_LANDMARKS}")
     print(f"  摄像头    : {args.camera}  {args.width}x{args.height}")
+    print(
+        f"  进出检测  : 连续 {args.stable_frames} 帧命中算进入 / "
+        f"丢失 {args.absent_timeout:g}s 算离开"
+    )
     print("  退出      : 窗口内按 q 或 ESC（或终端 Ctrl+C）")
     print("=" * 60)
 
@@ -110,6 +132,12 @@ def main(argv: list[str] | None = None) -> int:
 
 def _loop(camera: CameraStream, detector: PoseDetector, args: argparse.Namespace) -> int:
     """主循环：读帧 → 检测 → 绘制 → 显示。"""
+    # 第二阶段新增：人物进出检测（只消费 person_detected 布尔值，不碰画面）
+    presence = PresenceDetector(
+        stable_frames=args.stable_frames,
+        absent_timeout=args.absent_timeout,
+    )
+
     frame_count = 0
     fps = 0.0
     fps_timer = time.perf_counter()
@@ -127,6 +155,12 @@ def _loop(camera: CameraStream, detector: PoseDetector, args: argparse.Namespace
         read_fail_count = 0
 
         result = detector.detect(frame)
+
+        # 第二阶段新增：把「这一帧有没有可靠人体」交给状态机。
+        # 状态机内部做防抖 / 滞后，并在状态变化时自己打印 [Presence] 事件，
+        # 所以这里不需要接收返回值（后续阶段才需要把事件发给 B）。
+        presence.update(result.person_detected)
+
         annotated = draw_pose_debug(
             frame,
             result,
