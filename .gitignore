@@ -1,1 +1,18 @@
+# 系统 / 编辑器
 .DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 运行产物
+*.log

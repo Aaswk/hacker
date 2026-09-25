@@ -1,0 +1,12 @@
+# 桌宠观察人类 —— Vision 模块依赖
+#
+# 环境：Python 3.14（Windows）
+# 说明：mediapipe 1.0.x 的 wheel 是 py3-none-* 纯 Python 标签，
+#       因此可以装在 Python 3.14 上；它内部会自动带上 opencv-contrib-python。
+#
+# 安装（推荐用国内镜像）：
+#   pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+mediapipe==1.0.1
+opencv-python==5.0.0.93
+numpy==2.5.3
