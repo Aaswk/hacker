@@ -1,12 +1,14 @@
-"""演示入口：摄像头实时 Pose 检测 + 人物进出检测。
+"""演示入口：摄像头实时 Pose 检测 + 人物进出检测 + 伸展检测。
 
-做两件事：
-1. 把摄像头画面 + 人体骨架 + person_detected 状态实时显示出来（第一阶段）。
+做三件事：
+1. 把摄像头画面 + 人体骨架 + person_detected 状态实时显示出来（1.1）。
 2. 把每帧的 person_detected 喂给 PresenceDetector，在终端打印
-   [Presence] PERSON_ENTER / PERSON_LEFT / PERSON_RETURNED（第二阶段）。
+   [Presence] PERSON_ENTER / PERSON_LEFT / PERSON_RETURNED（1.2）。
+3. 把每帧的关键点喂给 StretchingDetector，双手举过头顶并保持一小段时间时
+   在终端打印 [Stretching] STRETCHING（1.3）。
 
-本文件只负责「串流程」（组装 camera / detector / presence / visualizer），
-不堆放具体算法实现，方便后续接桌宠前端时替换显示层。
+本文件只负责「串流程」（组装 camera / detector / presence / stretching /
+visualizer），不堆放具体算法实现，方便后续接桌宠前端时替换显示层。
 
 运行：
     python -m vision.main
@@ -25,6 +27,7 @@ import cv2
 from .camera import CameraStream
 from .pose_detector import DEFAULT_MODEL_PATH, NUM_LANDMARKS, PoseDetector
 from .presence_detector import PresenceDetector
+from .stretching_detector import StretchingDetector
 from .visualizer import draw_pose_debug
 
 WINDOW_NAME = "DeskPet Vision - Phase 1 Pose"
@@ -32,7 +35,7 @@ WINDOW_NAME = "DeskPet Vision - Phase 1 Pose"
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="摄像头实时人体姿态检测 + 人物进出检测（调试用）",
+        description="摄像头实时人体姿态检测 + 人物进出检测 + 伸展检测（调试用）",
     )
     parser.add_argument("--camera", type=int, default=0, help="摄像头编号，默认 0")
     parser.add_argument("--width", type=int, default=640, help="画面宽度，默认 640")
@@ -81,6 +84,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=2.0,
         help="连续丢失多少秒才算「真的走了」，默认 2.0 秒",
     )
+    # -- 1.3 伸展检测的参数 ------------------------------------------------
+    parser.add_argument(
+        "--stretch-hold",
+        type=float,
+        default=0.6,
+        help="双手举过头顶需要连续保持几秒才算伸展，默认 0.6 秒",
+    )
+    parser.add_argument(
+        "--stretch-cooldown",
+        type=float,
+        default=5.0,
+        help="两次 STRETCHING 事件的最小间隔秒数，默认 5.0（连续测试可调小）",
+    )
     return parser.parse_args(argv)
 
 
@@ -95,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"  进出检测  : 连续 {args.stable_frames} 帧命中算进入 / "
         f"丢失 {args.absent_timeout:g}s 算离开"
+    )
+    print(
+        f"  伸展检测  : 双手举过头顶保持 {args.stretch_hold:g}s 触发 / "
+        f"冷却 {args.stretch_cooldown:g}s"
     )
     print("  退出      : 窗口内按 q 或 ESC（或终端 Ctrl+C）")
     print("=" * 60)
@@ -137,6 +157,11 @@ def _loop(camera: CameraStream, detector: PoseDetector, args: argparse.Namespace
         stable_frames=args.stable_frames,
         absent_timeout=args.absent_timeout,
     )
+    # 1.3 新增：伸展检测（需要看关键点，所以消费整个 PoseResult）
+    stretching = StretchingDetector(
+        hold_seconds=args.stretch_hold,
+        cooldown_seconds=args.stretch_cooldown,
+    )
 
     frame_count = 0
     fps = 0.0
@@ -160,6 +185,10 @@ def _loop(camera: CameraStream, detector: PoseDetector, args: argparse.Namespace
         # 状态机内部做防抖 / 滞后，并在状态变化时自己打印 [Presence] 事件，
         # 所以这里不需要接收返回值（后续阶段才需要把事件发给 B）。
         presence.update(result.person_detected)
+
+        # 1.3 新增：伸展检测。同样自己打印 [Stretching] STRETCHING，
+        # 事件只产生一次（连续保持只报一次，必须放下手才可能再次触发）。
+        stretching.update(result)
 
         annotated = draw_pose_debug(
             frame,
