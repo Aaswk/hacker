@@ -87,14 +87,22 @@ const CSS = `
 }
 .ob-chip {
   display: inline-block;
-  margin: 0 0 6px;
-  padding: 1px 7px 2px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  margin: 0 0 9px;
+  padding: 3px 11px 4px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
 }
-.ob-text { margin: 0; font-size: 14px; line-height: 1.75; letter-spacing: 0.02em; }
+.ob-text {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.9;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  word-break: break-word;
+}
 @media (prefers-reduced-motion: reduce) {
   .ob-wrap { animation: none; }
 }
@@ -156,10 +164,10 @@ function BubbleCard({
           "--fukidashi-color": tone.fg,
           "--fukidashi-border-color": tone.edge,
           "--fukidashi-border-width": "2px",
-          "--fukidashi-radius": "8px",
-          "--fukidashi-padding": "12px 14px",
-          "--fukidashi-max-width": "20rem",
-          "--fukidashi-shadow": `4px 4px 0 ${tone.edge}`,
+          "--fukidashi-radius": "12px",
+          "--fukidashi-padding": "16px 20px 18px",
+          "--fukidashi-max-width": "25rem",
+          "--fukidashi-shadow": `5px 5px 0 ${tone.edge}`,
         }}
       >
         <span className="ob-chip" style={{ background: tone.chipBg, color: tone.chipFg }}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { PetState } from "@/types/contract";
 
 /* ==================================================================
@@ -196,11 +196,20 @@ function oGlyph(
   gg.globalAlpha = 1;
 }
 
-/* 实心圆（1 逻辑像素 = 1 图集像素，不做抗锯齿） */
-function oCircle(gg: Ctx, cx: number, cy: number, r: number, col: string) {
-  for (let dy = -r; dy <= r; dy++) {
-    const dx = Math.floor(Math.sqrt(r * r - dy * dy));
-    opx(gg, cx - dx, cy + dy, dx * 2 + 1, 1, col);
+/* 空心圆环：外半径 ro、内半径 ri，中间留空（用来画镜框，中间透出猫自己的眼睛） */
+function oRing(gg: Ctx, cx: number, cy: number, ro: number, ri: number, col: string) {
+  for (let dy = -ro; dy <= ro; dy++) {
+    const ady = Math.abs(dy);
+    const odx = Math.floor(Math.sqrt(ro * ro - dy * dy));
+    if (ady <= ri) {
+      const idx = Math.floor(Math.sqrt(ri * ri - dy * dy));
+      const w = odx - idx;
+      if (w <= 0) continue;
+      opx(gg, cx - odx, cy + dy, w, 1, col);
+      opx(gg, cx + idx + 1, cy + dy, w, 1, col);
+    } else {
+      opx(gg, cx - odx, cy + dy, odx * 2 + 1, 1, col);
+    }
   }
 }
 
@@ -238,11 +247,14 @@ const G_BULB_BASE = [
    头顶道具 overlay
    ================================================================== */
 
-/* --- OBSERVING：手拿圆润的像素小双筒望远镜（镜筒对准猫眼 左 69,81 / 右 123,81） --- */
+/* --- OBSERVING：圆框呆萌眼镜（戴在猫眼上 左 69,81 / 右 123,81）
+   设计要点：只画「镜框 + 镜腿 + 鼻梁桥 + 一点镜片反光」，镜片中间完全留空，
+   让猫自己的眼睛透出来——避免「眼球上又长了一双眼睛」的惊悚观感；
+   整副眼镜缓慢左右扫视，配上猫脸，一眼就能读成「它正盯着屏幕外的人类看」。 --- */
 function drawScope(gg: Ctx, now: number) {
-  const CYCLE = 5600;
-  const IN = 340;
-  const OUT = 320;
+  const CYCLE = 6400;
+  const IN = 300;
+  const OUT = 420;
   const cyc = now % CYCLE;
   let s: number;
   if (cyc < IN) s = easeOutBack(cyc / IN);
@@ -252,70 +264,56 @@ function drawScope(gg: Ctx, now: number) {
   } else s = 1;
   if (s <= 0.03) return;
 
-  const cx = 96;
-  const cy = 81;
-  gg.save();
-  gg.translate(cx, cy);
-  gg.scale(s, s);
-  gg.translate(-cx, -cy);
+  const LX = 69; // 左眼镜片中心
+  const RX = 123; // 右眼镜片中心
+  const R = 15; // 镜片半径
+  const LY = 81 + Math.sin(now / 780) * 1.1; // 轻轻起伏
+  const swing = Math.sin(now / 1150) * 1.9; // 整副眼镜左右扫视
 
-  const LX = 69;
-  const RX = 123;
-  const LY = 81 + Math.sin(now / 700) * 1.2;
-  const tw = 0.6 + 0.4 * Math.abs(Math.sin(now / 760));
+  gg.save();
+  gg.translate(96, LY);
+  gg.scale(s, s);
+  gg.translate(-96, -LY);
+  gg.translate(swing, 0);
+
+  /* 镜腿：两小段伸向耳侧，坐实「戴在脸上」 */
+  opx(gg, LX - R - 12, LY - 3, 14, 6, C.edge);
+  opx(gg, LX - R - 11, LY - 2, 12, 4, C.tan);
+  opx(gg, RX + R - 2, LY - 3, 14, 6, C.edge);
+  opx(gg, RX + R - 1, LY - 2, 12, 4, C.tan);
+
+  /* 鼻梁桥 */
+  const bridgeW = RX - R - (LX + R) + 8;
+  opx(gg, LX + R - 4, LY - 3, bridgeW, 6, C.edge);
+  opx(gg, LX + R - 3, LY - 2, bridgeW - 2, 4, C.tanHi);
 
   for (let i = 0; i < 2; i++) {
     const bx = i ? RX : LX;
-    oCircle(gg, bx, LY, 21, C.edge);
-    oCircle(gg, bx, LY, 19, C.tan);
-    oCircle(gg, bx - 11, LY - 11, 5, C.tanHi);
-    oCircle(gg, bx, LY, 15, C.edge);
-    oCircle(gg, bx, LY, 13, C.cyan);
-    oCircle(gg, bx, LY, 9, C.cyanHi);
-    gg.globalAlpha = tw;
-    opx(gg, bx - 9, LY - 9, 5, 5, C.cream);
-    opx(gg, bx - 8, LY - 8, 3, 3, C.cream);
-    opx(gg, bx + 4, LY + 3, 3, 3, C.cream);
-    gg.globalAlpha = 1;
-  }
-
-  /* 中间连接桥 + 下方转轴 */
-  opx(gg, 88, LY - 8, 16, 15, C.edge);
-  opx(gg, 90, LY - 6, 12, 11, C.tan);
-  opx(gg, 90, LY - 6, 12, 2, C.tanHi);
-  opx(gg, 93, LY + 9, 6, 6, C.edge);
-  opx(gg, 94, LY + 10, 4, 4, C.metalHi);
-
-  /* 顶部调焦轮 */
-  opx(gg, 91, LY - 25, 10, 7, C.edge);
-  opx(gg, 92, LY - 24, 8, 5, C.tanHi);
-
-  /* 两只猫爪从下方抱住镜筒 */
-  const paws = [
-    [46, 96],
-    [128, 96],
-  ];
-  for (let i = 0; i < 2; i++) {
-    const p = paws[i];
-    opx(gg, p[0], p[1], 18, 14, C.edge);
-    opx(gg, p[0] + 2, p[1] + 2, 14, 10, C.tan);
-    opx(gg, p[0] + 3, p[1] + 3, 12, 3, C.tanHi);
-    opx(gg, p[0] + 3, p[1] + 9, 12, 2, C.edge);
+    /* 只有镜框：空心圆环，中间不填充 → 猫自己的眼睛原样透出来 */
+    oRing(gg, bx, LY, R, R - 3, C.edge); // 深色外镜框
+    oRing(gg, bx, LY, R - 3, R - 4, C.tanHi); // 内侧一圈高光，做出镜框厚度
+    /* 镜片左上角一点斜向反光（是玻璃反光，不是眼睛） */
+    opx(gg, bx - 6, LY - 6, 3, 1, C.cream);
+    opx(gg, bx - 5, LY - 5, 1, 2, C.cream);
   }
 
   gg.restore();
 }
 
-/* --- ALERT：头顶一个大感叹号，1400ms 慢闪 + 2px 轻浮动 --- */
+/* --- ALERT：头顶一个大感叹号，260ms「弹进来」+ 1400ms 慢闪 + 2px 轻浮动 --- */
 function drawAlert(gg: Ctx, now: number) {
+  /* 进入动画：从上方压着 easeOutBack 弹下，避免凭空闪现 */
+  const t = Math.min(1, now / 260);
+  const pop = easeOutBack(t);
+  const a = Math.min(1, now / 170);
   const on = now % 1400 < 940;
-  const blink = on ? 1 : 0.22;
-  const dy = Math.sin(now / 900) * 2;
-  oGlyph(gg, G_BANG, 91, -46 + dy, 5, C.warn, C.edge, blink);
-  oGlyph(gg, G_BANG, 93, -43 + dy, 3, C.warnHi, null, blink);
+  const blink = (on ? 1 : 0.22) * a;
+  const dy = -46 + (1 - pop) * -26 + Math.sin(now / 900) * 2;
+  oGlyph(gg, G_BANG, 91, dy, 5, C.warn, C.edge, blink);
+  oGlyph(gg, G_BANG, 93, dy + 3, 3, C.warnHi, null, blink);
 }
 
-/* --- CONFUSED：三个大小不一的问号，各飘各的 --- */
+/* --- CONFUSED：三个大小不一的问号，错开 90ms 依次浮出，各飘各的 --- */
 function drawConfused(gg: Ctx, now: number) {
   const items = [
     { x: 118, y: -34, k: 3, ph: 0 },
@@ -324,8 +322,11 @@ function drawConfused(gg: Ctx, now: number) {
   ];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
-    const dy = Math.sin(now / 560 + it.ph) * 4;
-    oGlyph(gg, G_QUEST, it.x, it.y + dy, it.k, C.cream, C.edge, 0.95);
+    const t = Math.min(1, Math.max(0, (now - i * 90) / 300));
+    if (t <= 0) continue;
+    const pop = easeOutBack(t);
+    const dy = Math.sin(now / 560 + it.ph) * 4 + (1 - pop) * 12;
+    oGlyph(gg, G_QUEST, it.x, it.y + dy, it.k, C.cream, C.edge, 0.95 * Math.min(1, t * 1.5));
   }
 }
 
@@ -387,9 +388,10 @@ function drawExcited(gg: Ctx, now: number) {
     { x: 158, y: 30, k: 2, ph: 3.6 },
     { x: 92, y: -44, k: 1, ph: 0.7 },
   ];
+  const ea = Math.min(1, now / 340); // 星芒整体淡入
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
-    const s = 0.6 + 0.4 * Math.abs(Math.sin(now / 620 + it.ph));
+    const s = (0.6 + 0.4 * Math.abs(Math.sin(now / 620 + it.ph))) * ea;
     const col = i % 2 ? C.yellow : C.cyanHi;
     oGlyph(gg, G_STAR, it.x, it.y, it.k, col, C.edge, s);
   }
@@ -595,6 +597,12 @@ function buildCss(): string {
     "transition:transform .34s cubic-bezier(.3,.9,.4,1);will-change:transform;}";
   css += ".boxcat-cell{position:relative;width:192px;height:208px;transform-origin:bottom center;}";
   css +=
+    ".boxcat-sprwrap{position:relative;width:192px;height:208px;" +
+    "animation:boxcat-enter .3s cubic-bezier(.2,.9,.3,1) both;}";
+  css +=
+    "@keyframes boxcat-enter{0%{opacity:0;transform:translateY(8px) scale(.93);}" +
+    "55%{opacity:1;}100%{opacity:1;transform:none;}}";
+  css +=
     '.boxcat-sprite{width:192px;height:208px;background-image:url("/boxcat.webp");' +
     "background-repeat:no-repeat;background-size:1536px 1872px;image-rendering:pixelated;}";
   css +=
@@ -686,7 +694,7 @@ function buildCss(): string {
   /* 无障碍：尊重系统「减少动态效果」 */
   css +=
     "@media (prefers-reduced-motion: reduce){" +
-    ".boxcat-petwrap,.boxcat-cell,.boxcat-sprite,.boxcat-book,.boxcat-ov{animation:none!important;transition:none!important;}}";
+    ".boxcat-petwrap,.boxcat-cell,.boxcat-sprwrap,.boxcat-sprite,.boxcat-book,.boxcat-ov{animation:none!important;transition:none!important;}}";
 
   cachedCss = css;
   return css;
@@ -711,10 +719,55 @@ interface PetProps {
   pet_state?: PetVisualState;
 }
 
+/* 换动作的节奏（ms）：
+   - 记录（THINKING）刻意走「快」：不桥接、立刻切，强调「飞速记录」；
+   - 其余动作走「稳」：目标态先连续稳定 SETTLE_MS 才起手，随后在「发呆」上停
+     BRIDGE_MS 再切过去，且一个动作至少演 MIN_HOLD_MS 才允许被下一个打断。
+   这样既保持「都以发呆为基准起手」，又避免 B 连续下发时高频硬切、看起来鬼畜。 */
+const SETTLE_MS = 180;
+const BRIDGE_MS = 380;
+const MIN_HOLD_MS = 900;
+
 export function Pet({ pet_state = "IDLE" }: PetProps) {
-  const spec = STATE_SPEC[pet_state];
-  const isThinking = pet_state === "THINKING";
+  /* shown 是「此刻真正在演的状态」。非记录态永远先经过 IDLE 再到目标状态。 */
+  const [shown, setShown] = useState<PetVisualState>(pet_state);
+  const spec = STATE_SPEC[shown];
+  const isThinking = shown === "THINKING";
   const reduced = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, () => false);
+
+  /* 当前真正在演的状态 + 它的最短驻留截止时间（用 ref 保存，避免把节流逻辑塞进依赖） */
+  const shownRef = useRef<PetVisualState>(pet_state);
+  const holdUntilRef = useRef(0);
+  const showNow = useCallback((s: PetVisualState) => {
+    shownRef.current = s;
+    setShown(s);
+    holdUntilRef.current = s === "IDLE" ? 0 : performance.now() + MIN_HOLD_MS;
+  }, []);
+
+  /* 状态桥接：THINKING 立刻切；其余先稳定、再回发呆、再切目标。
+     全部 setState 都放在定时器回调里，遵守 react-hooks/set-state-in-effect。 */
+  useEffect(() => {
+    if (pet_state === shownRef.current) return;
+    if (pet_state === "THINKING") {
+      const t = window.setTimeout(() => showNow(pet_state), 0);
+      return () => window.clearTimeout(t);
+    }
+    /* 目标态要先稳定住，才值得起手；抖动窗口内再次变化就重新计时（吸收抖动的关键） */
+    const timers: number[] = [];
+    const settle = window.setTimeout(() => {
+      /* 若正在演别的动作，至少演够 MIN_HOLD_MS 才允许被打断 */
+      const holdLeft = Math.max(0, holdUntilRef.current - performance.now());
+      const toIdle = shownRef.current === "IDLE" ? 0 : Math.max(SETTLE_MS, holdLeft);
+      timers.push(
+        window.setTimeout(() => {
+          showNow("IDLE");
+          timers.push(window.setTimeout(() => showNow(pet_state), BRIDGE_MS));
+        }, toIdle),
+      );
+    }, SETTLE_MS);
+    timers.push(settle);
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, [pet_state, showNow]);
 
   const boxRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -806,6 +859,8 @@ export function Pet({ pet_state = "IDLE" }: PetProps) {
     }
 
     let lastT = performance.now();
+    /* 进入本状态的时间基准：头顶道具的进场动画按「已进入多久」计时，而不是绝对时钟 */
+    const fxT0 = lastT;
     const tick = (now: number) => {
       if (cancelled) return;
       const dt = Math.min(50, now - lastT);
@@ -828,7 +883,7 @@ export function Pet({ pet_state = "IDLE" }: PetProps) {
         updatePuffs(anim, dt);
         if (smokeG) drawPuffs(smokeG, anim);
       } else if (overlayG && spec.fx) {
-        drawOverlay(overlayG, spec.fx, now);
+        drawOverlay(overlayG, spec.fx, now - fxT0);
       }
 
       raf = requestAnimationFrame(tick);
@@ -840,7 +895,7 @@ export function Pet({ pet_state = "IDLE" }: PetProps) {
       cancelAnimationFrame(raf);
       timers.forEach((id) => window.clearTimeout(id));
     };
-  }, [pet_state, isThinking, spec.fx, reduced]);
+  }, [shown, isThinking, spec.fx, reduced]);
 
   /* --- JSX 派生类名 --- */
   const seqItem = SEQ[effPhase] ?? SEQ[0];
@@ -864,10 +919,13 @@ export function Pet({ pet_state = "IDLE" }: PetProps) {
         <div className="boxcat-stage">
           <div className={petwrapClass}>
             <div className={cellClass}>
-              <div className={spriteClass} />
-              {!isThinking && spec.fx ? (
-                <canvas ref={overlayRef} className="boxcat-ov" width={CW} height={OV_H} />
-              ) : null}
+              {/* key 换体态即重挂载 → 进场动画重播，避免动作硬切「闪现」 */}
+              <div key={spec.body} className="boxcat-sprwrap">
+                <div className={spriteClass} />
+                {!isThinking && spec.fx ? (
+                  <canvas ref={overlayRef} className="boxcat-ov" width={CW} height={OV_H} />
+                ) : null}
+              </div>
             </div>
           </div>
 

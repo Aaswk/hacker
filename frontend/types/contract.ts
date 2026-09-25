@@ -45,6 +45,16 @@ export interface Observation {
   pet_state: PetState;
   /** 只允许 message，不允许 alien_interpretation */
   message: string;
+  /**
+   * 以下三个字段不是 A 的必填输入：POST /events 的响应体里没有它们，
+   * 只有 GET /observations 会额外下发（B 后端实测）。
+   * 仅用于 Step 6 观察日志抽屉展示「时间」与「置信度条」，字段名与 B 保持一致。
+   */
+  subject_id?: string;
+  /** 0 ~ 1 */
+  confidence?: number;
+  /** 带时区的 ISO 8601 */
+  timestamp?: string;
 }
 
 /**

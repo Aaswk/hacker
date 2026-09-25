@@ -465,6 +465,19 @@ HUMAN #001
 
 **可替换点**：卡片动画、数字滚动效果、导出为图片的方案。
 
+**模块选型（本次）**
+
+- **卡片动画 / 仪式感容器**：`guokaigdg/animal-island-ui`（已在前序步骤使用，当前锁定 `1.13.0`）
+  - `Modal`（`variant="game"` 异形自然外框）承载整张物种卡，负责「浮现 → 落定 → 盖章」的入场节奏
+  - ⚠️ `Modal` 内置打字机（`typewriter` 默认 `true`、`typeSpeed` 默认 80ms），物种卡的字段要按设计节奏逐条浮现，须显式传 `typewriter={false}` 自行控时
+  - `Card`（`pattern` / `color` 走档案纸质感）承载 `DISCOVERED BEHAVIORS` 与 `RESEARCHER NOTE` 分块；`hoverable` 仅带来 `cursor:pointer + translateY(-2px)`，静态展示用默认 `false`
+  - 与 `Drawer` 同源的 SSR 约束：`Modal` 走 portal，必须 `next/dynamic` + `ssr:false` 挂载；库内 CSS 为 unlayered，同元素上的 Tailwind 字号 / 颜色会被覆盖，需用 inline style
+- **数字滚动**：`NumberFlow`（`barvian/number-flow`，React 包名 **`@number-flow/react`**，零依赖，MIT）
+  - 用于 `event_counts` 的计数展示（`× 4`、`× 2`、`× 1`）：数字逐位滚动（odometer 风格），比直接出现更有「正在计算」的感觉，配合圆润字体更萌
+  - 用法：`import NumberFlow from "@number-flow/react"` → `<NumberFlow value={4} />`，可用 `prefix` / `suffix`（如 `suffix="次"`）、`spinTiming` 调滚动节奏；默认 `respectMotionPreference` 尊重 reduced-motion
+  - 计数与星级仍由 `event_counts` 映射，**不改契约字段名**
+  - 可选：`Countdown` 组件（同库，`variant="island"`）用于「今日观察时间」，与 `NumberFlow` 二选一即可
+
 ---
 
 ### Step 8 — 进入体验与桌面布局

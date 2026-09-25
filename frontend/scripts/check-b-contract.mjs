@@ -248,9 +248,41 @@ async function main() {
     const { res } = await http("/species-card");
     if (check(res.ok, "HTTP 200", `实际 ${res.status}`)) {
       const { json } = await readJson(res);
-      // A 侧 SpeciesCard 目前是占位类型，这里只做存在性检查并打印真实形状
-      console.log(`        实际返回形状：${JSON.stringify(json).slice(0, 300)}`);
-      warn("字段名待三方定稿", "A 目前按 { subject_id, title, description, event_counts } 占位，请对照上面实际形状确认");
+      // 口径来源：A 侧 types/contract.ts 的 SpeciesCard
+      // { subject_id: string, summary: string, event_counts: Partial<Record<HumanEventType, number>> }
+      const shaped = isRecord(json);
+      if (check(shaped, "响应是对象（不是数组 / null）", JSON.stringify(json).slice(0, 160))) {
+        check(
+          typeof json.subject_id === "string" && json.subject_id.length > 0,
+          "subject_id 是非空 string",
+          `实际 ${JSON.stringify(json.subject_id)}`,
+        );
+        check(
+          typeof json.summary === "string",
+          "summary 是 string",
+          typeof json.summary === "string"
+            ? json.summary.length > 0
+              ? `共 ${json.summary.length} 字`
+              : "为空串（A 会回退到本地兜底文案）"
+            : `实际 ${JSON.stringify(json.summary)}`,
+        );
+        const hasCounts = isRecord(json.event_counts);
+        if (check(hasCounts, "含 event_counts 对象", JSON.stringify(json.event_counts).slice(0, 160))) {
+          const keys = Object.keys(json.event_counts);
+          const unknownKeys = keys.filter((key) => !HUMAN_EVENTS.includes(key));
+          check(
+            unknownKeys.length === 0,
+            "event_counts 的 key 都是 6 枚举之一",
+            unknownKeys.length === 0 ? `计数项：${keys.join(", ") || "—"}` : `非法 key：${unknownKeys.join(", ")}`,
+          );
+          const badValues = keys.filter((key) => typeof json.event_counts[key] !== "number");
+          check(
+            badValues.length === 0,
+            "event_counts 的值都是 number",
+            badValues.length === 0 ? "" : `非数字：${badValues.join(", ")}`,
+          );
+        }
+      }
     }
   } catch (err) {
     fail("GET /species-card 可达", err instanceof Error ? err.message : String(err));

@@ -42,7 +42,9 @@ interface QueuedBubble extends ObservationBubbleItem {
   source: "observation" | "ambient";
 }
 
-/* 预览用台词池：同一动作多条文本，随机播放其中一条 */
+/* 预览用台词池：同一动作多条文本，随机播放其中一条。
+   刻意混搭多种文风：冷淡田野记录 / 冷幽默吐槽 / 警报播报 / 档案公文，
+   让同样的行为每次反馈都不太一样。 */
 const POOL: Record<BubbleTone, string[]> = {
   normal: [
     "HUMAN #001 摄入透明液体，本次为今日第 3 次",
@@ -50,16 +52,35 @@ const POOL: Record<BubbleTone, string[]> = {
     "HUMAN #001 反复注视发光板子，专注时长异常",
     "HUMAN #001 发出几个音节，未检测到含义，已归档",
     "HUMAN #001 挠头 2 次，推测正在思考，继续观察",
+    "HUMAN #001 对着发光板子叹气，叹息成分待化验",
+    "HUMAN #001 左右张望 4 次，附近并没有值得张望的东西",
+    "HUMAN #001 揉了揉眼睛，随后继续注视发光板子。恒心可嘉",
+    "检测到 HUMAN #001 的坐姿已从「端正」降级为「融化」",
+    "HUMAN #001 打了一个哈欠，嘴部张合幅度创本日新高",
+    "HUMAN #001 似乎在低声与发光板子争执，板子拒不回应",
+    "HUMAN #001 伸手够向桌角，动作熟练，疑似日常仪式",
+    "HUMAN #001 的视线在屏幕与本子之间来回搬运，效率未知",
+    "记录：HUMAN #001 又一次对自己说了句「马上就好」",
   ],
   alert: [
     "HUMAN #001 突然离开视野范围，未记录到离场原因",
     "检测到 HUMAN #001 高速位移，已切换追踪模式",
     "HUMAN #001 发出高频声波，来源不明，警戒中",
+    "HUMAN #001 起身速度异常，请全体研究员扶稳记录本",
+    "警报：HUMAN #001 的手伸向了不该伸向的地方",
+    "HUMAN #001 位置突变，本次移动未提交任何申请",
+    "监测到 HUMAN #001 大幅后仰，椅子发出了求救信号",
+    "HUMAN #001 猛地回头，与本观察舱对视 0.4 秒，随后装作无事发生",
   ],
   discover: [
     "首次观察到 HUMAN #001 双臂上举后仰，新行为已归档",
     "HUMAN #001 摄入黑色液体后短时效率提升，值得持续观察",
     "HUMAN #001 对着发光板子露出牙齿，疑似威胁展示？",
+    "重大发现：HUMAN #001 竟能一边发呆一边打字，本所暂无解释",
+    "首次记录到 HUMAN #001 对空气点头，回应对象不明",
+    "HUMAN #001 突然无声发笑，笑点不在监控范围内",
+    "新行为归档：HUMAN #001 把两件事同时忘掉，又同时想起",
+    "检测到 HUMAN #001 的自我辩解行为，逻辑自洽度约 61%",
   ],
 };
 
@@ -73,6 +94,10 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "检测到 HUMAN #001 高速位移，已切换追踪模式",
       "HUMAN #001 移动速度远超日常记录，警戒中",
+      "警告：观察舱内出现不明高速物体，疑似人类手臂",
+      "HUMAN #001 的运动轨迹无法预测，建议保持距离",
+      "目标剧烈移动，本所的镜头追得很辛苦",
+      "检测到突发位移，已默默把记录笔握紧了",
     ],
   },
   leave: {
@@ -81,12 +106,20 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "HUMAN #001 突然离开视野范围，未记录到离场原因",
       "目标丢失！HUMAN #001 消失在观察窗边缘",
+      "观测窗空了。没有告别，没有解释",
+      "HUMAN #001 撤离迅速，疑似有要事，也可能只是想走",
+      "信号中断：HUMAN #001 已不在监测半径内",
     ],
   },
   return: {
     tone: "normal",
     cd: 6000,
-    texts: ["HUMAN #001 回到视野范围，恢复记录"],
+    texts: [
+      "HUMAN #001 回到视野范围，恢复记录",
+      "目标重新上线，看起来和离开时一样",
+      "HUMAN #001 归位，本所松了一口气并假装没松",
+      "观察对象返回，档案继续，笔尖继续",
+    ],
   },
   still: {
     tone: "normal",
@@ -94,6 +127,9 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "HUMAN #001 已长时间保持静止，疑似进入待机",
       "HUMAN #001 迟迟没有新动作，本研究员先记一笔",
+      "静止时长刷新纪录，暂无证据表明它已睡着",
+      "HUMAN #001 一动不动，本所开始怀疑是不是卡住了",
+      "长时间无动作。已归档为「冥想」，虽然并无依据",
     ],
   },
   tap: {
@@ -102,12 +138,33 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "首次记录到 HUMAN #001 主动接触观察舱，重大发现！",
       "HUMAN #001 在敲玻璃！它看得见我？！",
+      "检测到观察舱受到触碰，来源：HUMAN #001。挑衅还是打招呼？",
+      "HUMAN #001 主动发起接触，本所首次成为被观察的一方",
+      "接触事件！已回放三遍，仍未确定它的意图",
     ],
   },
 };
 
-function pick<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+/* 每条池子记住最近用过的下标，随机时尽量避开，避免同样行为反复播同一句。
+   用「池子 → 最近下标」的模块级 Map，跨调用共享；只保留最近 KEEP 条。 */
+const KEEP_RECENT = 5;
+const recentIdx = new Map<string, number[]>();
+
+function pickFresh<T>(key: string, arr: readonly T[]): T {
+  if (arr.length <= 1) return arr[0];
+  let used = recentIdx.get(key);
+  if (!used) {
+    used = [];
+    recentIdx.set(key, used);
+  }
+  const keep = Math.min(KEEP_RECENT, arr.length - 1);
+  let idx = Math.floor(Math.random() * arr.length);
+  for (let n = 0; n < 10 && used.includes(idx); n++) {
+    idx = Math.floor(Math.random() * arr.length);
+  }
+  used.push(idx);
+  while (used.length > keep) used.shift();
+  return arr[idx];
 }
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -178,7 +235,7 @@ export function usePetBehavior() {
       seq.current += 1;
       const item: QueuedBubble = {
         id: seq.current,
-        message: message ?? pick(POOL[tone]),
+        message: message ?? pickFresh("pool:" + tone, POOL[tone]),
         tone,
         state,
         source,
@@ -215,7 +272,7 @@ export function usePetBehavior() {
       const now = Date.now();
       if (coolRef.current[kind] > now) return;
       coolRef.current[kind] = now + spec.cd;
-      push(spec.tone, pick(spec.texts));
+      push(spec.tone, pickFresh("trg:" + kind, spec.texts));
     },
     [push]
   );
