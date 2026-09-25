@@ -1,0 +1,11 @@
+[33m13023f8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/test[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/feature/test[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: reset: moving to origin/feature/test
+[33m223ea36[m HEAD@{1}: checkout: moving from feature/test to feature/test
+[33m223ea36[m HEAD@{2}: commit: 摄像头截取上报和桌宠状态动画
+[33madc7c48[m HEAD@{3}: revert: Revert "规划阶段"
+[33m89ea7ba[m HEAD@{4}: commit: 规划阶段
+[33ma686f84[m HEAD@{5}: commit: 主题修订
+[33mc485512[m HEAD@{6}: commit: 主题阐释和主题确定
+[33m089a2a8[m HEAD@{7}: commit: 主题阐释和主题确定
+[33mdc87a45[m[33m ([m[1;32mmain[m[33m)[m HEAD@{8}: checkout: moving from main to feature/test
+[33mdc87a45[m[33m ([m[1;32mmain[m[33m)[m HEAD@{9}: checkout: moving from main to main
+[33mdc87a45[m[33m ([m[1;32mmain[m[33m)[m HEAD@{10}: clone: from https://github.com/Aaswk/hacker.git

@@ -11,8 +11,10 @@ import type {
 /* ==================================================================
    桌宠行为引擎（Step 4 预览用；Step 5 的 usePetState 会在它上面接 B 的真实 Observation）
    ------------------------------------------------------------------
-   ① 气泡语气 → 对应动作：normal→OBSERVING / alert→ALERT / discover→EXCITED
-      （队首语气直接派生当前动作，不在 effect 里 setState）
+   ① 气泡语气 / 指定状态 → 对应动作：
+      push(tone, message, state) 传了 state 就用 B 下发的 pet_state，
+      否则退回「语气 → 动作」：normal→OBSERVING / alert→ALERT / discover→EXCITED
+      （队首直接派生当前动作，不在 effect 里 setState）
    ② 同一语气配多条台词，每次随机挑一条（预览用假台词，正式版 message 只来自 B）
    ③ 待机时偶尔自己演戏：左右溜达 / 发呆 / 好奇张望 / 整理笔记 / 小声嘀咕
    ④ 观察舱里的人类行为会触发特殊反应（各有冷却，避免刷屏）：
@@ -25,6 +27,20 @@ const TONE_STATE: Record<BubbleTone, PetVisualState> = {
   alert: "ALERT",
   discover: "EXCITED",
 };
+
+/** 队列上限：超过就不再排，避免气泡堆成山 */
+const QUEUE_LIMIT = 4;
+
+/** 队列项：在气泡基础上带上「该条要播的 pet_state」（来自 B 的 Observation，Step 5 写入） */
+interface QueuedBubble extends ObservationBubbleItem {
+  state?: PetVisualState;
+  /**
+   * 来源：
+   * - observation：B 下发的真实观察（Step 5），永不丢弃，队列满时挤掉一条环境气泡
+   * - ambient：本机待机小剧场 / 用户行为反应，队列满时直接丢掉
+   */
+  source: "observation" | "ambient";
+}
 
 /* 预览用台词池：同一动作多条文本，随机播放其中一条 */
 const POOL: Record<BubbleTone, string[]> = {
@@ -97,13 +113,12 @@ function pick<T>(arr: readonly T[]): T {
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 export function usePetBehavior() {
-  /* 待机小剧场的当前状态；有气泡在播时被「队首语气派生」的动作覆盖 */
+  /* 待机小剧场的当前状态；有气泡在播时被「队首语气 / B 的 pet_state」派生覆盖 */
   const [actState, setActState] = useState<PetVisualState>("IDLE");
-  const [queue, setQueue] = useState<ObservationBubbleItem[]>([]);
+  const [queue, setQueue] = useState<QueuedBubble[]>([]);
   const [petX, setPetX] = useState(0);
 
   const head = queue[0];
-  const petState: PetVisualState = head ? TONE_STATE[head.tone ?? "normal"] : actState;
 
   const seq = useRef(0);
   const queueRef = useRef(queue);
@@ -116,6 +131,11 @@ export function usePetBehavior() {
   const ptrRef = useRef({ x: 0, y: 0, t: 0 });
   const lastMoveAtRef = useRef(0);
   const leaveAtRef = useRef(0);
+
+  /* 队首若有 B 下发的 pet_state 就直接用它，否则按语气派生（渲染期纯计算，不进 effect） */
+  const petState: PetVisualState = head
+    ? (head.state ?? TONE_STATE[head.tone ?? "normal"])
+    : actState;
 
   useEffect(() => {
     queueRef.current = queue;
@@ -141,15 +161,49 @@ export function usePetBehavior() {
     return () => window.clearTimeout(t);
   }, [queueLen]);
 
-  const push = useCallback((tone: BubbleTone, message?: string) => {
-    seq.current += 1;
-    const item: ObservationBubbleItem = {
-      id: seq.current,
-      message: message ?? pick(POOL[tone]),
-      tone,
-    };
-    setQueue((q) => (q.length >= 4 ? q : [...q, item]));
-  }, []);
+  /**
+   * 排一条气泡。
+   * @param tone  语气，决定气泡配色 / 标签
+   * @param message 台词；不传则从预览台词池随机挑一条（正式链路只来自 B 的 message）
+   * @param state 该条要播的 pet_state；不传则按语气派生
+   * @param source 来源：observation（B 的真实观察，最优先）/ ambient（本机小剧场，可弃）
+   */
+  const push = useCallback(
+    (
+      tone: BubbleTone,
+      message?: string,
+      state?: PetVisualState,
+      source: "observation" | "ambient" = "ambient"
+    ) => {
+      seq.current += 1;
+      const item: QueuedBubble = {
+        id: seq.current,
+        message: message ?? pick(POOL[tone]),
+        tone,
+        state,
+        source,
+      };
+
+      setQueue((q) => {
+        // B 的真实观察优先级最高：ALERT 插到队首（但不打断已在播的 ALERT）
+        if (source === "observation" && state === "ALERT") {
+          const headIsAlert = q.length > 0 && q[0].state === "ALERT";
+          if (!headIsAlert) return [item, ...q];
+        }
+        if (q.length < QUEUE_LIMIT) return [...q, item];
+        // 队列已满：
+        // - ambient（本机闲聊）直接丢弃，避免挤爆队列
+        if (source === "ambient") return q;
+        // - observation（B 的真实观察）永不丢弃：挤掉一条最旧的 ambient 再入队
+        const victim = q.findIndex((it) => it.source === "ambient");
+        if (victim === -1) return q;
+        const next = q.slice();
+        next.splice(victim, 1);
+        return [...next, item];
+      });
+    },
+    []
+  );
 
   const dismiss = useCallback((id: number | string) => {
     setQueue((q) => q.filter((it) => it.id !== id));

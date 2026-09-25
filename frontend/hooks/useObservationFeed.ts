@@ -116,7 +116,13 @@ export function useObservationFeed({
 
   return {
     observations,
-    lastObservation: observations[observations.length - 1] ?? null,
+    // B 的 GET /observations 是 ORDER BY id DESC（新的在前），
+    // 所以「最新一条」要按 observation_id 取最大，不能取数组末位
+    lastObservation: observations.reduce<Observation | null>(
+      (latest, item) =>
+        latest === null || item.observation_id > latest.observation_id ? item : latest,
+      null,
+    ),
     maxObservationId,
     error,
   };
