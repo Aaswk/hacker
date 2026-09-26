@@ -73,10 +73,10 @@ const EVENT_FLAVOR: Record<HumanEventType, EventFlavor> = {
     category: "进入观察区域",
     emoji: "🚪",
     description: [
-      "HUMAN #001 进入观察区域",
-      "观测窗亮起：HUMAN #001 回来了",
-      "HUMAN #001 步入视野，脚步一如既往地随意",
-      "档案续写。HUMAN #001 已回到镜头范围内",
+      "观测体 №001 进入观察区域",
+      "观测窗亮起：观测体 №001 回来了",
+      "观测体 №001 步入视野，脚步一如既往地随意",
+      "档案续写。观测体 №001 已回到镜头范围内",
     ],
     hypothesis: [
       "该生物存在周期性返回固定区域的行为习惯",
@@ -91,10 +91,10 @@ const EVENT_FLAVOR: Record<HumanEventType, EventFlavor> = {
     category: "液体摄入",
     emoji: "💧",
     description: [
-      "HUMAN #001 摄入透明液体",
-      "HUMAN #001 举起杯子，透明液体顺利入账",
+      "观测体 №001 摄入透明液体",
+      "观测体 №001 举起杯子，透明液体顺利入账",
       "观测到本日又一轮液体补给，动作已相当熟练",
-      "HUMAN #001 小口补充液体，神情专注，像在完成某种仪式",
+      "观测体 №001 小口补充液体，神情专注，像在完成某种仪式",
     ],
     hypothesis: [
       "人类需要定期补充液体以维持内部系统稳定",
@@ -109,10 +109,10 @@ const EVENT_FLAVOR: Record<HumanEventType, EventFlavor> = {
     category: "肢体伸展",
     emoji: "🧘",
     description: [
-      "HUMAN #001 舒展躯干与上肢",
-      "HUMAN #001 双臂上举，骨骼发出一连串轻响",
+      "观测体 №001 舒展躯干与上肢",
+      "观测体 №001 双臂上举，骨骼发出一连串轻响",
       "观测到一次标准伸展：先向左，再向右，最后长长吐出",
-      "HUMAN #001 把整个身体折叠后重新展开，疑似重启",
+      "观测体 №001 把整个身体折叠后重新展开，疑似重启",
     ],
     hypothesis: [
       "长时间静止后，该生物需要伸展以重置肢体状态",
@@ -127,10 +127,10 @@ const EVENT_FLAVOR: Record<HumanEventType, EventFlavor> = {
     category: "离开观察区域",
     emoji: "🚶",
     description: [
-      "HUMAN #001 离开观察区域",
-      "目标丢失：HUMAN #001 走出观测窗，没有告别",
-      "HUMAN #001 离场，画面只剩一把空椅子",
-      "观测中断。HUMAN #001 的去向已超出监测半径",
+      "观测体 №001 离开观察区域",
+      "目标丢失：观测体 №001 走出观测窗，没有告别",
+      "观测体 №001 离场，画面只剩一把空椅子",
+      "观测中断。观测体 №001 的去向已超出监测半径",
     ],
     hypothesis: [
       "该生物的移动范围超出当前观察舱，需要扩大监测半径",
@@ -145,10 +145,10 @@ const EVENT_FLAVOR: Record<HumanEventType, EventFlavor> = {
     category: "重返观察区域",
     emoji: "🔄",
     description: [
-      "HUMAN #001 重新出现在观察区域",
-      "目标重新上线。HUMAN #001 归位，状态看起来和离开时差不多",
-      "观测恢复。椅子上的凹陷被 HUMAN #001 精准填回",
-      "HUMAN #001 返回，坐下的姿势与离开前完全一致",
+      "观测体 №001 重新出现在观察区域",
+      "目标重新上线。观测体 №001 归位，状态看起来和离开时差不多",
+      "观测恢复。椅子上的凹陷被 观测体 №001 精准填回",
+      "观测体 №001 返回，坐下的姿势与离开前完全一致",
     ],
     hypothesis: [
       "离开与返回行为存在关联，疑似已形成固定动线",
@@ -163,9 +163,9 @@ const EVENT_FLAVOR: Record<HumanEventType, EventFlavor> = {
     category: "未归类行为",
     emoji: "❔",
     description: [
-      "HUMAN #001 表现出尚未归类的新行为",
+      "观测体 №001 表现出尚未归类的新行为",
       "检测到无法归类的动作，本所的词典里暂时没有对应词条",
-      "HUMAN #001 做出一个全新的动作，记录笔停顿了半秒",
+      "观测体 №001 做出一个全新的动作，记录笔停顿了半秒",
       "观测到未知行为。已原样归档，等待后续比对",
     ],
     hypothesis: [
@@ -440,7 +440,7 @@ export function LogDrawer({
 
         {timeline.length === 0 ? (
           <p style={{ marginTop: 14, fontSize: 12, color: "#a8987d" }}>
-            档案为空。点击「开始观察」后，这里会逐条累积 HUMAN #001 的田野记录。
+            档案为空。点击「开始观察」后，这里会逐条累积 观测体 №001 的田野记录。
           </p>
         ) : (
           <ul style={{ marginTop: 14, listStyle: "none", padding: 0 }}>

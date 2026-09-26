@@ -198,7 +198,7 @@ export const api = {
     return request<SubjectSummary>(`/subjects/${subjectId}`);
   },
 
-  /** 《HUMAN #001 人类物种卡》 */
+  /** 《观测体 №001 人类物种卡》 */
   getSpeciesCard(): Promise<SpeciesCard> {
     return request<SpeciesCard>("/species-card");
   },

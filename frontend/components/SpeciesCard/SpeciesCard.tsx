@@ -4,7 +4,7 @@
  * Step 7 · 物种卡（Aha Moment）
  * ------------------------------------------------------------------
  * 点击桌宠旁的 🧬 → 先敲键盘（桌宠切 THINKING），再以「game」异形弹窗浮现
- * 一张外星生物学家给 HUMAN #001 建的物种档案。
+ * 一张外星生物学家给 观测体 №001 建的物种档案。
  *
  * 数据全部来自 B 的 GET /species-card：
  *   summary      → 「记录员手记」（原文展示，不改写）
@@ -32,6 +32,16 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 const INK = "#725d42";
 const INK_SOFT = "#8a7b66";
 const FAINT = "#a8987d";
+
+/** 档案照区：重绘中的扫描光带动画（配合 snapshotPending） */
+const PHOTO_CSS = `
+@keyframes sc-scan {
+  0%   { transform: translateY(-110%); }
+  100% { transform: translateY(260%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-scanbar { animation: none !important; opacity: .3; }
+}`;
 
 /** 仪式节奏：六段依次落定，前一段稳了再出下一段 */
 const STEP = { TITLE: 1, FIELDS: 2, STARS: 3, COUNT: 4, NOTE: 5, SEAL: 6 } as const;
@@ -109,9 +119,19 @@ export interface SpeciesCardProps {
   onClose: () => void;
   /** 打开时抓拍的人物照片（data URL）；没有就渲染占位框 */
   snapshot?: string | null;
+  /** 抓拍已由 AI 动漫化重绘（成功后照片角标亮起） */
+  snapshotCartoon?: boolean;
+  /** 已抓拍、重绘结果还没回来：显示「重绘中」占位，避免先闪一张原图 */
+  snapshotPending?: boolean;
 }
 
-export function SpeciesCard({ open, onClose, snapshot }: SpeciesCardProps) {
+export function SpeciesCard({
+  open,
+  onClose,
+  snapshot,
+  snapshotCartoon,
+  snapshotPending,
+}: SpeciesCardProps) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<SpeciesCardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -203,6 +223,7 @@ export function SpeciesCard({ open, onClose, snapshot }: SpeciesCardProps) {
       }
     >
       <div style={{ width: "100%", fontSize: 13, lineHeight: 1.6, color: INK_SOFT }}>
+        <style>{PHOTO_CSS}</style>
         <div
           style={{
             position: "relative",
@@ -228,7 +249,7 @@ export function SpeciesCard({ open, onClose, snapshot }: SpeciesCardProps) {
                 color: INK,
               }}
             >
-              HUMAN #001
+              观测体 №001
             </div>
             <div style={{ marginTop: 6, fontSize: 11, color: INK_SOFT }}>
               观测状态：持续监视 · 本卷宗由记录员自动生成，观测对象并不知情
@@ -255,14 +276,30 @@ export function SpeciesCard({ open, onClose, snapshot }: SpeciesCardProps) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={snapshot}
-                  alt="HUMAN #001 抓拍"
+                  alt="观测体 №001 抓拍"
                   style={{
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
+                    // 动漫化结果是 512×512 正方形，压进 4:3 时偏上取景，别把脸裁掉
+                    objectPosition: "center 32%",
                     transform: "scaleX(-1)",
                   }}
                 />
+              ) : snapshotPending ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 4,
+                    color: INK_SOFT,
+                  }}
+                >
+                  <span style={{ fontSize: 26 }}>🎨</span>
+                  <span style={{ fontSize: 11, letterSpacing: "0.2em" }}>影像重绘中</span>
+                  <span style={{ fontSize: 11, color: FAINT }}>正在以动漫风格重建该个体</span>
+                </div>
               ) : (
                 <div
                   style={{
@@ -278,6 +315,40 @@ export function SpeciesCard({ open, onClose, snapshot }: SpeciesCardProps) {
                   <span style={{ fontSize: 11 }}>对象未配合采集</span>
                 </div>
               )}
+              {/* 重绘中：一道扫描光带自上而下掠过，明确「在处理」而不是卡住 */}
+              {snapshotPending ? (
+                <span
+                  className="sc-scanbar"
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: "42%",
+                    pointerEvents: "none",
+                    background:
+                      "linear-gradient(180deg, rgba(232,167,43,0) 0%, rgba(232,167,43,0.30) 50%, rgba(232,167,43,0) 100%)",
+                    animation: "sc-scan 1.5s linear infinite",
+                  }}
+                />
+              ) : null}
+              {snapshotCartoon ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    bottom: 8,
+                    padding: "2px 9px",
+                    borderRadius: 999,
+                    background: "rgba(114,93,66,0.82)",
+                    color: "#f7f1e3",
+                    fontSize: 10,
+                    letterSpacing: "0.14em",
+                  }}
+                >
+                  ✨ AI 动漫化重绘
+                </span>
+              ) : null}
             </div>
           </div>
 

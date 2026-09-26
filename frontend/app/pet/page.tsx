@@ -177,7 +177,7 @@ export default function PetDesktopPage() {
               size="small"
               title={
                 archiveCount >= SPECIES_CARD_MIN_OBSERVATIONS
-                  ? "生成 HUMAN #001 物种卡"
+                  ? "生成 观测体 №001 物种卡"
                   : `样本不足，记录员拒绝立案（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
               }
               onClick={openSpeciesCard}
@@ -196,7 +196,7 @@ export default function PetDesktopPage() {
         subjectId="HUMAN_001"
       />
 
-      {/* HUMAN #001 物种卡（无抓拍，渲染占位框） */}
+      {/* 观测体 №001 物种卡（无抓拍，渲染占位框） */}
       <SpeciesCardDialog open={cardOpen} onClose={() => setCardOpen(false)} />
     </main>
   );

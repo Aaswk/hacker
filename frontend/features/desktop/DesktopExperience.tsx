@@ -73,6 +73,10 @@ export function DesktopExperience() {
   const [logOpen, setLogOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<string | null>(null);
+  /** 档案照是否已被 AI 动漫化重绘（/api/cartoon 成功后置真） */
+  const [snapshotCartoon, setSnapshotCartoon] = useState(false);
+  /** 抓拍后、重绘结果回来前：照片区显示「重绘中」，绝不先闪一张原图 */
+  const [snapshotPending, setSnapshotPending] = useState(false);
 
   /* Step 5：进入后才开始轮询 B 的 /observations */
   const pet = usePetState({ enabled: entered, intervalMs: 2000 });
@@ -171,22 +175,50 @@ export function DesktopExperience() {
     }
     push("discover", "正在比对全部观察记录，生成物种档案…", "THINKING", "ambient");
     setSnapshot(null);
+    setSnapshotCartoon(false);
+    setSnapshotPending(false);
     void startCamera();
     window.setTimeout(() => setCardOpen(true), 1400);
   }, [archiveCount, push, startCamera]);
 
-  /* 卡片浮现且摄像头就绪时抓一帧，作为物种卡的现场照片 */
+  /* 卡片浮现且摄像头就绪时抓一帧，作为物种卡的现场照片。
+     时序：抓拍成功 → 立刻切到「重绘中」占位 → /api/cartoon 回来一次性显示最终图。
+     不再先闪原图再替换；只有重绘失败时才退回原图，保证现场永远有画面。
+     /api/cartoon 内部只有 AnimeGANv2(C 的 8002) 一个引擎：成功用动漫图，失败保留抓拍原图。 */
   useEffect(() => {
     if (!cardOpen || cameraStatus !== "ready") return;
     let cancelled = false;
     const t = window.setTimeout(() => {
       void (async () => {
+        let url = "";
         try {
           const blob = await captureFrame(videoRef.current);
-          const url = await blobToDataUrl(blob);
-          if (!cancelled) setSnapshot(url);
+          url = await blobToDataUrl(blob);
         } catch {
-          /* 抓拍失败就保留占位框，不影响物种卡本身 */
+          return; // 抓拍失败就保留占位框，不影响物种卡本身
+        }
+        if (!url || cancelled) return;
+
+        setSnapshotPending(true);
+        try {
+          const res = await fetch("/api/cartoon", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // data URL 去掉前缀，只传纯 base64
+            body: JSON.stringify({ image: url.slice(url.indexOf(",") + 1), mime: "image/jpeg" }),
+          });
+          const data = (await res.json()) as { ok: boolean; image?: string; mime?: string };
+          if (cancelled) return;
+          if (data.ok && data.image) {
+            setSnapshot(`data:${data.mime ?? "image/jpeg"};base64,${data.image}`);
+            setSnapshotCartoon(true);
+          } else {
+            setSnapshot(url); // 重绘失败 → 退回抓拍原图
+          }
+        } catch {
+          if (!cancelled) setSnapshot(url); // 网络异常 → 退回原图
+        } finally {
+          if (!cancelled) setSnapshotPending(false);
         }
       })();
     }, 260);
@@ -269,7 +301,7 @@ export function DesktopExperience() {
                 size="small"
                 title={
                   archiveCount >= SPECIES_CARD_MIN_OBSERVATIONS
-                    ? "生成 HUMAN #001 物种卡"
+                    ? "生成 观测体 №001 物种卡"
                     : `样本不足，记录员拒绝立案（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
                 }
                 onClick={openSpeciesCard}
@@ -323,11 +355,13 @@ export function DesktopExperience() {
         subjectId="HUMAN_001"
       />
 
-      {/* Step 7：HUMAN #001 物种卡 */}
+      {/* Step 7：观测体 №001 物种卡 */}
       <SpeciesCardDialog
         open={cardOpen}
         onClose={() => setCardOpen(false)}
         snapshot={snapshot}
+        snapshotCartoon={snapshotCartoon}
+        snapshotPending={snapshotPending}
       />
     </main>
   );

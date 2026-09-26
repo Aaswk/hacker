@@ -24,7 +24,7 @@ const NARRATIVE = {
   DRINKING: ["CURIOUS", "目标正在为内部海洋补充液体。"],
   STRETCHING: ["ALERT", "目标正在扩大身体面积，原因有待观察。"],
   PERSON_LEFT: ["ALERT", "观察对象离开了视野。"],
-  PERSON_RETURNED: ["EXCITED", "HUMAN #001 再次出现。"],
+  PERSON_RETURNED: ["EXCITED", "观测体 №001 再次出现。"],
   UNKNOWN: ["CONFUSED", "记录到尚未理解的行为。"],
 };
 

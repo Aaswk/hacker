@@ -25,7 +25,7 @@ import {
    ------------------------------------------------------------------
    轮询 B 的 GET /observations（默认 http://localhost:8001），
    新记录 → 桌宠动作 + 观察气泡 + 抽屉时间线同时发生；
-   Step 7 点击 🧬 → 桌宠先敲键盘（THINKING），再浮现 HUMAN #001 物种卡；
+   Step 7 点击 🧬 → 桌宠先敲键盘（THINKING），再浮现 观测体 №001 物种卡；
    物种卡数据取自 B 的 GET /species-card（summary + event_counts）。
    接口地址见 A 文档 0.3，可用 NEXT_PUBLIC_API_BASE_URL 覆盖。
    ================================================================== */
@@ -261,7 +261,7 @@ export default function LivePage() {
               >
                 <span className="mr-1">🧬</span>
                 {canOpenSpeciesCard
-                  ? "HUMAN #001"
+                  ? "观测体 №001"
                   : `样本不足 ${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}`}
               </button>
             </div>
@@ -317,7 +317,7 @@ export default function LivePage() {
               <p className="text-xs leading-relaxed text-zinc-400">
                 Step 6：点击桌宠旁边的 📓，从屏幕右侧滑出观察日志抽屉——时间线由
                 animal-island-ui 的 Drawer / Card / Tag / Progress 拼成，含观察描述、
-                当前假说、置信度条与 HUMAN #001 的累计行为归类。
+                当前假说、置信度条与 观测体 №001 的累计行为归类。
               </p>
               <button
                 type="button"
@@ -331,7 +331,7 @@ export default function LivePage() {
             <section className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-6 py-6">
               <div className="flex items-baseline justify-between">
                 <h2 className="text-sm font-medium text-zinc-300">
-                  HUMAN #001 · 物种档案
+                  观测体 №001 · 物种档案
                 </h2>
                 <button
                   type="button"
@@ -391,7 +391,7 @@ export default function LivePage() {
                     }
                   >
                     {canOpenSpeciesCard
-                      ? "🧬 生成 HUMAN #001 物种卡"
+                      ? "🧬 生成 观测体 №001 物种卡"
                       : `🧬 样本不足 ${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}`}
                   </button>
                 </>
@@ -409,7 +409,7 @@ export default function LivePage() {
         subjectId="HUMAN_001"
       />
 
-      {/* Step 7：HUMAN #001 物种卡（game 异形弹窗） */}
+      {/* Step 7：观测体 №001 物种卡（game 异形弹窗） */}
       <SpeciesCardDialog
         open={cardOpen}
         onClose={() => setCardOpen(false)}

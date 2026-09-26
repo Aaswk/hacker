@@ -81,7 +81,7 @@ NARRATIVE = {
     Event.DRINKING: (PetState.CURIOUS, "目标正在为内部海洋补充液体。"),
     Event.STRETCHING: (PetState.ALERT, "目标正在扩大身体面积，原因有待观察。"),
     Event.PERSON_LEFT: (PetState.ALERT, "观察对象离开了视野。"),
-    Event.PERSON_RETURNED: (PetState.EXCITED, "HUMAN #001 再次出现。"),
+    Event.PERSON_RETURNED: (PetState.EXCITED, "观测体 №001 再次出现。"),
     Event.UNKNOWN: (PetState.CONFUSED, "记录到尚未理解的行为。"),
 }
 

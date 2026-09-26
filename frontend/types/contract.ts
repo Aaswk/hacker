@@ -71,7 +71,7 @@ export interface VisionEvent {
 
 /**
  * 以下两个查询类接口的形状已按 B 后端实测响应定稿（2026-09-26 契约自检 PASS 22/FAIL 0）。
- * 卡片标题「HUMAN #001」由前端固定文案渲染，不在响应里下发。
+ * 卡片标题「观测体 №001」由前端固定文案渲染，不在响应里下发。
  */
 
 /** GET /subjects/HUMAN_001：累计行为计数 */
@@ -81,7 +81,7 @@ export interface SubjectSummary {
   event_counts: Partial<Record<HumanEventType, number>>;
 }
 
-/** GET /species-card：HUMAN #001 人类物种卡 */
+/** GET /species-card：观测体 №001 人类物种卡 */
 export interface SpeciesCard {
   subject_id: string;
   /** 后端生成的物种描述文案，可能为空串 */

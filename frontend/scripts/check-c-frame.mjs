@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * C 的 /frame 契约自检 + C → B 上报链路自检
- * 校验口径来自 A 侧 lib/api.ts 的 sendFrame / types/contract.ts 的 VisionEvent。
+ * C 的契约自检：/frame（送帧识别）+ /cartoon（AnimeGANv2 动漫化）+ C → B 上报链路
+ * 校验口径来自 A 侧 lib/api.ts 的 sendFrame / types/contract.ts 的 VisionEvent，
+ * 以及 app/api/cartoon/route.ts 的 viaAnimegan。
  *
  * 用法：
  *   node scripts/check-c-frame.mjs                          # 连通性 + CORS + 入参校验（不需要图片）
- *   node scripts/check-c-frame.mjs --frame shot.jpg         # 完整契约测试（需要一张真实 JPEG）
- *   node scripts/check-c-frame.mjs http://localhost:8002 --frame shot.jpg --b http://localhost:8001
+ *   node scripts/check-c-frame.mjs --frame shot.jpg         # /frame 完整契约测试（需要一张真实 JPEG）
+ *   node scripts/check-c-frame.mjs --portrait face.jpg      # /cartoon 动漫化测试（需要一张真实人像 JPEG）
+ *   node scripts/check-c-frame.mjs http://localhost:8002 --frame shot.jpg --portrait face.jpg --b http://localhost:8001
  *
  * 无第三方依赖，Node 20+ 直接运行。全部通过时退出码 0，有 FAIL 时退出码 1。
  */
@@ -29,16 +31,21 @@ const ORIGIN = "http://localhost:3000";
 /** A 的 /frame 超时（api.ts: FRAME_TIMEOUT_MS） */
 const FRAME_TIMEOUT_MS = 10000;
 
+/** A 的 /cartoon 超时（route.ts: ANIMEGAN_TIMEOUT_MS） */
+const CARTOON_TIMEOUT_MS = 8000;
+
 /** 等 C 上报到 B 的最长时间 */
 const B_WAIT_MS = 10000;
 
 const argv = process.argv.slice(2);
 let cUrlArg = null;
 let framePath = null;
+let portraitPath = null;
 let bUrlArg = null;
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i];
   if (arg === "--frame") framePath = argv[++i];
+  else if (arg === "--portrait") portraitPath = argv[++i];
   else if (arg === "--b") bUrlArg = argv[++i];
   else if (!arg.startsWith("--")) cUrlArg = arg;
 }
@@ -85,6 +92,33 @@ function isoWithOffset(date) {
   const datePart = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
   const timePart = `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
   return `${datePart}T${timePart}${sign}${pad2(offsetMinutes / 60)}:${pad2(offsetMinutes % 60)}`;
+}
+
+/**
+ * 用 A 服务端的真实方式请求动漫化：
+ * multipart/form-data，字段 image（JPEG），不带 Origin（这是服务端到服务端，C 不需要为此开 CORS）。
+ * 期望：200 + Content-Type: image/* + 图片二进制。
+ */
+async function postCartoon(portrait) {
+  const form = new FormData();
+  if (portrait) {
+    form.append("image", new Blob([portrait.bytes], { type: "image/jpeg" }), portrait.name);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CARTOON_TIMEOUT_MS);
+  const startedAt = Date.now();
+  try {
+    const res = await fetch(`${C_URL}/cartoon`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+    const buf = Buffer.from(await res.arrayBuffer());
+    return { res, buf, ms: Date.now() - startedAt };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** 用 A 的真实方式发一拍：multipart/form-data，字段 frame + timestamp，不手动设 Content-Type */
@@ -158,16 +192,20 @@ async function maxObservationId() {
 }
 
 async function main() {
-  console.log(`C 的 /frame 契约自检 → ${C_URL}`);
+  console.log(`C 的契约自检 → ${C_URL}（/frame 送帧识别 + /cartoon 动漫化）`);
   console.log(`C → B 上报链路将检查 → ${B_URL}`);
   console.log("\nA 实际发出的请求长这样：");
   console.log(`  POST ${C_URL}/frame`);
   console.log("  Content-Type: multipart/form-data（浏览器自动带 boundary，A 不手动设置）");
   console.log("  frame     = image/jpeg，最长边 ≤ 1280、质量 0.7，约 2 FPS，文件名 frame-<毫秒>.jpg");
   console.log(`  timestamp = 带时区 ISO 8601，本轮示例 ${isoWithOffset(new Date())}`);
+  console.log(`  POST ${C_URL}/cartoon`);
+  console.log("  Content-Type: multipart/form-data（服务端发，无 Origin）");
+  console.log("  image     = image/jpeg 人像，文件名 portrait.jpg；返回图片二进制");
 
   // ---------- 1. 端点存在性 + 入参校验 ----------
   section("1. 端点存在性（故意不发 frame 字段，应被拒绝）");
+  let frameReachable = true;
   try {
     const { res, text, ms } = await postFrame(null);
     if (res.status >= 400) {
@@ -181,12 +219,14 @@ async function main() {
   } catch (err) {
     fail("POST /frame 可达", err instanceof Error ? err.message : String(err));
     console.log("        → C 没起、端口不对、或路径不是 /frame（A 前端会表现为「帧上报网络错误」）");
-    return finish();
+    frameReachable = false;
   }
 
   // ---------- 2. 完整契约 ----------
   section("2. 完整契约（真实 JPEG）");
-  if (!framePath) {
+  if (!frameReachable) {
+    warn("已跳过", "/frame 不可达（见第 1 节），跳过第 2、3 节；/cartoon 仍会照常检查");
+  } else if (!framePath) {
     warn("已跳过", "加 --frame <一张 jpg 的路径> 可跑完整契约；截一张图存成 jpg 即可");
     warn("响应语义未验证", "C 的 204/200 分支必须在真实帧上才能确认");
   } else {
@@ -249,6 +289,53 @@ async function main() {
     }
   }
 
+  // ---------- 4. /cartoon：AnimeGANv2 动漫化 ----------
+  section("4. /cartoon 动漫化（A 服务端调用，非浏览器直连，不需要 CORS）");
+  console.log(`        A 会这样调：POST ${C_URL}/cartoon`);
+  console.log("        Content-Type: multipart/form-data；字段 image = image/jpeg（单次 8s 超时）");
+  console.log("        期望：200 + Content-Type: image/* + 图片二进制（512×512）；失败则 A 保留抓拍原图");
+  if (!portraitPath) {
+    warn("已跳过", "加 --portrait <一张人像 jpg 的路径> 可跑本节");
+  } else {
+    let portrait;
+    try {
+      const bytes = await readFile(portraitPath);
+      portrait = { bytes, name: `portrait-${Date.now()}.jpg` };
+      pass("读取测试人像", `${basename(portraitPath)}，${bytes.length} 字节`);
+    } catch (err) {
+      fail("读取测试人像", err instanceof Error ? err.message : String(err));
+      return finish();
+    }
+
+    // 4a. 端点存在性：故意不发 image 字段，应被拒绝
+    try {
+      const { res } = await postCartoon(null);
+      if (res.status >= 400) pass("/cartoon 缺少 image 字段时返回 4xx", `HTTP ${res.status}`);
+      else warn("/cartoon 缺少 image 字段也返回 2xx", `HTTP ${res.status}；C 没有校验必填字段`);
+    } catch (err) {
+      fail("POST /cartoon 可达", err instanceof Error ? err.message : String(err));
+      console.log("        → C 没起、端口不对、或路径不是 /cartoon（A 会保留抓拍原图，不空卡）");
+    }
+
+    // 4b. 完整契约
+    try {
+      const { res, buf, ms } = await postCartoon(portrait);
+      const contentType = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+      check(res.status === 200, "/cartoon 返回 200", `HTTP ${res.status}`);
+      check(contentType.startsWith("image/"), "/cartoon 返回图片 Content-Type", contentType || "（缺失）");
+      check(buf.length > 0, "/cartoon 响应体非空", `${buf.length} 字节`);
+      check(ms < CARTOON_TIMEOUT_MS, "耗时未触发 A 的 8s 超时", `${ms}ms`);
+      if (!contentType.startsWith("image/")) {
+        console.log(`        响应体（前 200 字节）：${buf.toString("utf8", 0, 200)}`);
+      }
+      if (res.status === 200 && contentType.startsWith("image/") && buf.length > 0) {
+        console.log(`        → 动漫化结果 ${buf.length} 字节，A 会原样转 base64 交给物种卡`);
+      }
+    } catch (err) {
+      fail("POST /cartoon（带真实人像）可达", err instanceof Error ? err.message : String(err));
+    }
+  }
+
   finish();
 }
 
@@ -256,9 +343,9 @@ function finish() {
   console.log("\n" + "─".repeat(56));
   console.log(`PASS ${passCount} / FAIL ${failCount} / WARN ${warnCount}`);
   if (failCount === 0) {
-    console.log("结论：A 可以正常向 C 送帧。");
+    console.log("结论：A 可以正常向 C 送帧；/cartoon 动漫化这条路也通（未跑则见上方 WARN）。");
   } else {
-    console.log("结论：存在 FAIL 项，A 的帧上报会失败或连不上，需先修。");
+    console.log("结论：存在 FAIL 项，A 的 /frame 送帧或 /cartoon 动漫化会失败，需先修。");
   }
   // 不用 process.exit()：Windows 上它会与 undici 的连接关闭竞态，触发 libuv 断言
   process.exitCode = failCount === 0 ? 0 : 1;
