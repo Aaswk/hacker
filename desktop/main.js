@@ -2,9 +2,17 @@
 //
 // 职责：
 //  - 开一个「透明 / 无边框 / 置顶 / 不进任务栏」的窗口，加载 Next 的 /pet 路由。
-//    窗口铺满主显示器工作区（不含任务栏），也就是「边缘刚好贴着屏幕边」——
+//    窗口铺满所在显示器的工作区（不含任务栏），也就是「边缘刚好贴着屏幕边」——
 //    桌面整块都是桌宠的舞台，所以拖动不再是移窗，而是桌宠自己在整屏内移动
 //    （由渲染进程的 PetDock 负责，主进程只标记「拖动中，别穿透」）。
+//  - 跨平台 / 跨屏幕自适应（不写死任何分辨率）：
+//      尺寸一律取 workArea —— Windows/Linux 不含任务栏，macOS 不含菜单栏与 Dock，
+//      所以「贴着屏幕边」在每台机器上都是贴着可用的那块桌面。
+//      启动时打印一次检测到的显示器清单（尺寸 / 缩放 / 工作区），
+//      插拔显示器、改分辨率、改缩放、隐藏任务栏时自动重新铺满；
+//      Electron 的窗口坐标 / CSS 像素都走 DIP，Retina 等高缩放下命中判定不用换算。
+//      macOS 额外声明「出现在所有桌面 / 全屏应用之上」并隐藏 Dock 图标；
+//      Linux 需要合成器（compositor）才支持透明窗，无合成器时会是一块黑底。
 //  - 默认让整窗鼠标穿透（transparent 区域不挡桌面点击）；
 //    命中判定由主进程做：渲染进程上报桌宠 / 按钮 / 弹层面板的窗口内矩形，
 //    主进程每 HIT_INTERVAL_MS 读一次光标屏幕坐标，落在矩形内才关穿透。
@@ -27,10 +35,16 @@ const RELOAD_COOLDOWN_MS = 10000;
 
 const PET_URL = process.env.PET_URL || "http://localhost:3000/pet";
 
+const IS_MAC = process.platform === "darwin";
+/** 显示器变化后重排窗口的防抖时长（插拔 / 改分辨率会连发多次事件） */
+const REFIT_DEBOUNCE_MS = 250;
+
 /** @type {BrowserWindow | null} */
 let win = null;
 /** @type {NodeJS.Timeout | null} */
 let hitTimer = null;
+/** @type {NodeJS.Timeout | null} */
+let refitTimer = null;
 /** 渲染进程上报的命中区域（窗口内 CSS 像素）；与窗口 bounds 相加即屏幕坐标 */
 let hitRects = [];
 /** 当前是否整窗穿透；null = 尚未向系统设置过 */
@@ -39,10 +53,78 @@ let ignoring = null;
 let dragging = false;
 let lastReloadAt = 0;
 
+/* ------------------------------------------------------------------
+   屏幕适配：所有尺寸都从 screen API 现场读，不写死分辨率 / 平台
+   ------------------------------------------------------------------ */
+
+/** 一行一块地描述当前所有显示器（尺寸 / 缩放 / 工作区），用于启动自检与日志 */
+function describeDisplays() {
+  const primaryId = screen.getPrimaryDisplay().id;
+  return screen
+    .getAllDisplays()
+    .map((d, i) => {
+      const a = d.workArea;
+      const tag = d.id === primaryId ? " [主]" : "";
+      return `#${i + 1} 屏幕 ${d.size.width}×${d.size.height}${tag} 缩放 ${d.scaleFactor}x · 工作区 ${a.width}×${a.height} @${a.x},${a.y}`;
+    })
+    .join("\n           ");
+}
+
+/** 启动自检：把「这台机器是什么系统 / 什么屏」打印出来，便于对照排错 */
+function logEnvironment() {
+  console.log(
+    `[pet] 运行环境 ${process.platform}/${process.arch} · Electron ${process.versions.electron} · Chromium ${process.versions.chrome}\n` +
+    `[pet] 检测到 ${screen.getAllDisplays().length} 块显示器：\n           ${describeDisplays()}`,
+  );
+}
+
+/** 窗口该铺在哪块屏：优先它现在所在的那块（拔掉副屏后自然退回主屏） */
+function targetDisplay() {
+  if (win && !win.isDestroyed()) {
+    const d = screen.getDisplayMatching(win.getBounds());
+    if (d) return d;
+  }
+  return screen.getPrimaryDisplay();
+}
+
+/** 把窗口重新铺满目标显示器的工作区；已经贴合就不重复调用 setBounds */
+function fitToDisplay(reason) {
+  if (!win || win.isDestroyed()) return;
+  const d = targetDisplay();
+  const a = d.workArea;
+  const b = win.getBounds();
+  if (b.x !== a.x || b.y !== a.y || b.width !== a.width || b.height !== a.height) {
+    win.setBounds({ x: a.x, y: a.y, width: a.width, height: a.height });
+  }
+  console.log(
+    `[pet] ${reason} → 铺满 ${a.width}×${a.height} @${a.x},${a.y}（缩放 ${d.scaleFactor}x）`,
+  );
+}
+
+/** 显示器事件会连发，防抖后再重排一次 */
+function scheduleRefit(reason) {
+  if (refitTimer) clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => {
+    refitTimer = null;
+    if (!win || win.isDestroyed()) return;
+    console.log(`[pet] 显示器变化：\n           ${describeDisplays()}`);
+    fitToDisplay(reason);
+  }, REFIT_DEBOUNCE_MS);
+}
+
+/** 平台专属设置：Windows/Linux 无非必要项，macOS 需要额外两步 */
+function applyPlatformTweaks() {
+  if (!win || !IS_MAC) return;
+  // 1) 透明置顶窗在 macOS 上默认只活在当前 Space，切桌面 / 进全屏应用就「消失」了
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // 2) 桌宠不该在 Dock 里占一格（退出走右键菜单「🚪 退出桌宠」或 ⌘⌥⇧Q）
+  app.dock?.hide();
+}
+
 function createWindow() {
-  // 铺满主显示器工作区（不含任务栏）：桌宠的舞台就是整块桌面。
-  // 任务栏那一圈留给系统，桌宠不会被拖到任务栏底下被挡住。
-  const area = screen.getPrimaryDisplay().workArea;
+  // 铺满目标显示器工作区（不含任务栏；macOS 不含菜单栏与 Dock）：
+  // 桌宠的舞台就是整块桌面，任务栏那一圈留给系统。
+  const area = targetDisplay().workArea;
 
   win = new BrowserWindow({
     width: area.width,
@@ -69,12 +151,19 @@ function createWindow() {
 
   // 置顶到「屏保层」，尽量压住普通窗口
   win.setAlwaysOnTop(true, "screen-saver");
+  // 平台差异（macOS：所有桌面可见 + 隐藏 Dock 图标）
+  applyPlatformTweaks();
 
   // 默认整窗穿透；命中与否交给主进程轮询光标（见 startHitTracking）
   setIgnore(true);
   startHitTracking();
 
-  win.once("ready-to-show", () => win && win.show());
+  // showInactive：桌宠浮出来时不抢当前 App 的焦点（正在打字 / 看视频不被打断）
+  win.once("ready-to-show", () => {
+    if (!win) return;
+    fitToDisplay("启动");
+    win.showInactive();
+  });
 
   win.webContents.on("did-fail-load", (_e, code, desc, url) => {
     console.error(
@@ -189,6 +278,15 @@ ipcMain.on("pet:quit", () => {
 });
 
 app.whenReady().then(() => {
+  // 先做一次环境自检，再根据实际检测结果开窗
+  logEnvironment();
+
+  // 屏幕变化兜底：插拔显示器 / 改分辨率 / 改缩放 / 隐藏任务栏（macOS 进出全屏）
+  // 都会让 workArea 变化，重新铺满一次，桌宠始终贴着屏幕边。
+  screen.on("display-added", () => scheduleRefit("接入显示器"));
+  screen.on("display-removed", () => scheduleRefit("移除显示器"));
+  screen.on("display-metrics-changed", () => scheduleRefit("屏幕参数变化"));
+
   createWindow();
   // 兜底逃生口：万一窗口又变成「碰不到」，用快捷键也能重载或退出
   globalShortcut.register("CommandOrControl+Shift+Alt+R", () => reload());
@@ -201,6 +299,7 @@ app.whenReady().then(() => {
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   stopHitTracking();
+  if (refitTimer) clearTimeout(refitTimer);
 });
 
 app.on("window-all-closed", () => {

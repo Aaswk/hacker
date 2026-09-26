@@ -414,12 +414,20 @@ export function usePetBehavior() {
 
   /* 溜达一段：图集自带 running-right / running-left 行，走路时整体平移 */
   const playWalk = useCallback((dir: 1 | -1) => {
-    // 溜达余量围绕锚点对称展开。桌面壳的窗口已铺满整块工作区，
-    // 按视口宽取三成（最少 120px），小窗 / 网页里同样够用。
+    // 溜达余量围绕锚点对称展开，锚点是「水平居中」的桌宠盒子（宽 200），
+    // 所以左右各能走的距离 = 视口半宽 − 盒子半宽 − 一点余量。
+    // 取「视口宽三成」与这个上限的较小值：宽屏下按三成走得开，
+    // 窄屏（小笔记本 / 竖屏）下也不会走到屏外只剩半个身子。
     const span =
       typeof window === "undefined"
         ? 100
-        : Math.max(120, Math.round(window.innerWidth * 0.3));
+        : Math.max(
+          40,
+          Math.min(
+            Math.round(window.innerWidth * 0.3),
+            Math.round(window.innerWidth / 2 - 108),
+          ),
+        );
     const ms = rand(1400, 2000);
     let d = dir;
     let target = xRef.current + d * rand(60, 110);
