@@ -13,6 +13,7 @@ import {
   SPECIES_CARD_MIN_OBSERVATIONS,
 } from "@/components/SpeciesCard/archive";
 import { captureFrame } from "@/features/camera/capture";
+import { useFrameReporter } from "@/features/camera/useFrameReporter";
 import { PermissionGate } from "@/features/desktop/PermissionGate";
 import { useCamera } from "@/hooks/useCamera";
 import { usePetState } from "@/hooks/usePetState";
@@ -29,7 +30,9 @@ import type { SpeciesCard as SpeciesCardData } from "@/types/contract";
      ④ 摄像头画面不再预览：只留一个 1px 隐藏 video 挂着，保证物种卡还能抓帧
    ------------------------------------------------------------------
    数据来源：轮询 B 的 GET /observations（见 usePetState）。
-   截帧上报（useFrameReporter）本轮不接线，桌面只做「授权 + 轮询」。
+   截帧上报（useFrameReporter）：授权完成 → 进入桌面后开始，每 500ms 把一帧
+   交给 C 的 POST /frame；退出体验 / 组件卸载即停止。
+   C 的新事件只留在 A 侧，A 不提交 B 的 /events，状态与文案仍由 B 的 /observations 决定。
    ================================================================== */
 
 /** Drawer / Modal 内部用 createPortal 挂到 document.body，必须关掉 SSR */
@@ -92,6 +95,25 @@ export function DesktopExperience() {
     const t = window.setTimeout(() => setEntered(true), 0);
     return () => window.clearTimeout(t);
   }, [cameraStatus]);
+
+  /* Step 3：送帧上报链路（A → C 的 POST /frame，默认 http://localhost:8002/frame，500ms 一拍）。
+     C 的新事件只交给 onEvent，A 不在这里提交 B 的 /events；
+     桌宠状态与正式气泡继续由 usePetState 轮询 B 的 /observations 得到。 */
+  const reporter = useFrameReporter({
+    videoRef,
+    cameraReady: cameraStatus === "ready",
+  });
+  // 解构出稳定引用：reporter 每次渲染都是新对象，但 start / stop 是空依赖 useCallback
+  const reporterStart = reporter.start;
+  const reporterStop = reporter.stop;
+
+  /* 授权完成且已进入桌面 → 开始送帧；退出体验 / 组件卸载 → 停止。
+     提前返回时不启动，授权卡阶段不会有任何帧流出。 */
+  useEffect(() => {
+    if (!entered || cameraStatus !== "ready") return;
+    reporterStart();
+    return () => reporterStop();
+  }, [entered, cameraStatus, reporterStart, reporterStop]);
 
   /* 登场后先打个招呼：让评委立刻感到「它注意到我了」 */
   useEffect(() => {
