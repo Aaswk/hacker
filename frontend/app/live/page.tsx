@@ -5,6 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ObservationBubble } from "@/components/ObservationBubble/ObservationBubble";
 import { Pet } from "@/components/Pet/Pet";
+import {
+  blobToDataUrl,
+  pickInsufficientLine,
+  SPECIES_CARD_MIN_OBSERVATIONS,
+} from "@/components/SpeciesCard/archive";
 import { captureFrame } from "@/features/camera/capture";
 import { useCamera } from "@/hooks/useCamera";
 import { usePetState } from "@/hooks/usePetState";
@@ -39,16 +44,6 @@ const SpeciesCardDialog = dynamic(
   { ssr: false },
 );
 
-/** Blob → data URL，供物种卡展示抓拍照片（用完即随 state 释放，不落盘） */
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 const PET_STATE_LABEL: Record<string, string> = {
   IDLE: "发呆",
   OBSERVING: "观察中",
@@ -67,20 +62,6 @@ const EVENT_LABEL: Record<HumanEventType, string> = {
   PERSON_RETURNED: "回来",
   UNKNOWN: "未知行为",
 };
-
-/**
- * 立案门槛：档案累计记录不足 15 条，记录员拒绝建卡。
- * 样本太薄时产出的档案没有研究价值，也会让「Aha Moment」廉价化。
- */
-const SPECIES_CARD_MIN_OBSERVATIONS = 15;
-
-/** 样本不足时记录员的台词，按当前样本量轮换，免得每次都被同一句怼回去 */
-const INSUFFICIENT_SAMPLE_LINES = [
-  "样本量不足，不予立案。继续监视。",
-  "就这点记录，也想让我出档案？",
-  "数据太薄。记录员不是算命的。",
-  "本档案暂不受理。请把样本攒厚一点。",
-];
 
 export default function LivePage() {
   /* Step 5：状态映射层。enabled=true 即开始轮询 B 的 /observations */
@@ -132,8 +113,7 @@ export default function LivePage() {
   const openSpeciesCard = useCallback(() => {
     // 样本不足：桌宠切困惑、怼一句就打回去，不弹卡片
     if (archiveCount < SPECIES_CARD_MIN_OBSERVATIONS) {
-      const line =
-        INSUFFICIENT_SAMPLE_LINES[archiveCount % INSUFFICIENT_SAMPLE_LINES.length];
+      const line = pickInsufficientLine(archiveCount);
       pet.push(
         "normal",
         `${line}（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`,

@@ -3,9 +3,9 @@
  * B 接口契约自检（口径来源：A 侧 lib/api.ts 的 isObservation + useObservationFeed 的轮询去重逻辑）
  *
  * 用法：
- *   node scripts/check-b-contract.mjs                 # 读接口，不写数据
+ *   node scripts/check-b-contract.mjs                 # 读接口，不写数据（默认 http://localhost:8001）
  *   node scripts/check-b-contract.mjs --write         # 额外真实 POST /events（会往库里写一条测试记录）
- *   node scripts/check-b-contract.mjs http://localhost:8000
+ *   node scripts/check-b-contract.mjs http://localhost:8001
  *
  * 无第三方依赖，Node 20+ 直接运行。全部通过时退出码 0，有 FAIL 时退出码 1。
  */
@@ -40,7 +40,7 @@ const POLL_INTERVAL_MS = 2000;
 
 const argv = process.argv.slice(2);
 const writeMode = argv.includes("--write");
-const BASE_URL = (argv.find((a) => !a.startsWith("--")) ?? "http://localhost:8000").replace(/\/+$/, "");
+const BASE_URL = (argv.find((a) => !a.startsWith("--")) ?? "http://localhost:8001").replace(/\/+$/, "");
 
 let passCount = 0;
 let failCount = 0;
