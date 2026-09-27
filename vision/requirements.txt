@@ -1,0 +1,17 @@
+# Vision 模块（C：摄像头 / Pose / 动作识别 / VLM）的依赖
+#
+# 单独一个 venv，别和 B 的 FastAPI venv 混装（版本会互相顶）：
+#   python3 -m venv .venv-vision
+#   .venv-vision/bin/pip install -r vision/requirements.txt
+#   .venv-vision/bin/python -m vision.main
+#
+# 说明：mediapipe 的 wheel 是 py3-none-* 纯 Python 标签，会自带 opencv-contrib-python；
+#       国内装不动就加镜像：
+#         pip install -r vision/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#
+# 注意：只跑 VLM 探针（vision.selftest_vlm_live）不需要这些依赖，
+#       它对媒体库零依赖，系统自带的 python3 就能跑。
+
+mediapipe==1.0.1
+opencv-python==4.10.0.84
+numpy==1.26.4
