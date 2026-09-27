@@ -8,6 +8,7 @@ from enum import Enum
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -110,14 +111,27 @@ def db():
         connection.close()
 
 
-app = FastAPI(title="Human Observer MVP API")
-from fastapi.middleware.cors import CORSMiddleware
+def cors_origins() -> list[str]:
+    """允许跨域的前端来源：本机两个默认值 + ``CORS_EXTRA_ORIGINS``（逗号分隔）。
+
+    手机浏览器访问时（README 6.6 节），页面来源是 ``http://<Mac 局域网 IP>:3000``，
+    与默认白名单不匹配 → 浏览器会拦掉所有 ``/observations`` 轮询。
+    所以 ``scripts/dev-up.sh`` 在 ``LAN=1`` 时会把这个来源塞进环境变量，
+    默认（不设该变量）行为与以前完全一致。
+    """
+    origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    for origin in os.environ.get("CORS_EXTRA_ORIGINS", "").split(","):
+        origin = origin.strip().rstrip("/")
+        if origin and origin not in origins:
+            origins.append(origin)
+    return origins
+
 
 app = FastAPI(title="Human Observer MVP API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
