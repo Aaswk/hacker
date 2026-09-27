@@ -89,6 +89,7 @@ export function DesktopExperience() {
     start: startCamera,
     status: cameraStatus,
     error: cameraError,
+    reason: cameraReason,
     attachVideo,
     videoRef,
   } = camera;
@@ -253,6 +254,7 @@ export function DesktopExperience() {
         <PermissionGate
           status={cameraStatus}
           error={cameraError}
+          reason={cameraReason}
           onStart={() => void startCamera()}
           onSkip={() => setEntered(true)}
         />
@@ -340,7 +342,9 @@ export function DesktopExperience() {
                 : cameraStatus === "denied"
                   ? "摄像头被拒绝 · 重新授权"
                   : cameraStatus === "unavailable"
-                    ? "没有可用的摄像头"
+                    ? cameraReason === "insecure-context"
+                      ? "此设备需 HTTPS 才能用摄像头"
+                      : "没有可用的摄像头"
                     : "开启摄像头"}
             </button>
           )}
