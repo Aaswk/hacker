@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "animal-island-ui";
 
 import { AnchoredObservationBubble } from "@/components/ObservationBubble/ObservationBubble";
 import type { ObservationBubbleItem } from "@/components/ObservationBubble/ObservationBubble";
@@ -18,7 +19,7 @@ import type { PetVisualState } from "@/components/Pet/Pet";
      - 气泡：锚在桌宠头顶（AnchoredObservationBubble），贴屏幕边时自动翻边避让
      - 入口：📓 / 🧬 等按钮在「鼠标靠近桌宠或按钮区域」时浮现，
              热区把桌宠与按钮之间那道 12px 缝隙也算进去，移向按钮不会中途消失
-     - 单击：戳一戳（onPoke）；长按 180ms 才进入拖动，避免误移
+     - 单击：戳一戳（onPoke）；按住移动即拖动
      - 拖动：改自身 left/top（左右上下各至少留 60% 在屏内）。
              Electron 壳的窗口已铺满整块工作区，所以两种模式都是「拖桌宠自己」，
              移窗没有意义；window 模式额外通知主进程「拖动中」保持不穿透
@@ -30,11 +31,11 @@ import type { PetVisualState } from "@/components/Pet/Pet";
                  命中则关掉整窗鼠标穿透。
    ================================================================== */
 
-const LONG_PRESS_MS = 180;
-const DRAG_SLOP = 4;
-const SUPPRESS_CLICK_MS = 350;
-const MENU_W = 176;
-const MENU_H = 92;
+const DRAG_SLOP = 3;
+const MENU_W = 208;
+const MENU_H = 132;
+const MIN_SCALE = 50;
+const MAX_SCALE = 160;
 /** 悬停热区外扩量；大于按钮与桌宠之间的 12px 缝隙，保证鼠标移过去不会掉出热区 */
 const HOVER_PAD = 12;
 /** 离开热区后延迟收起，避免边缘抖动闪没 */
@@ -48,10 +49,17 @@ const BTN_W = 93;
 const BTN_GAP = 12;
 /** 桌宠溜达时桌宠自身的位移动画时长；按钮换边要跟它走同一条曲线才不会各走各的 */
 const WALK_MS = 1700;
-/** 按钮「从桌宠右侧切到左侧」所需的横向位移：跨过盒宽 + 左右各一条缝隙 + 按钮自身宽 */
-const BTN_SIDE_SHIFT = PET_BOX_W + BTN_GAP + BTN_W + BTN_GAP;
-/** 按钮贴到桌宠右侧时，其左缘要越过桌宠左缘的距离：盒宽 + 缝隙 */
-const BTN_RIGHT_EDGE = PET_BOX_W + BTN_GAP;
+
+type Position = { x: number; y: number };
+
+function keepOnScreen(x: number, y: number, width: number, height: number, visible = KEEP_VISIBLE): Position {
+  const minX = width * (visible - 1);
+  const minY = height * (visible - 1);
+  return {
+    x: Math.min(Math.max(minX, x), Math.max(minX, window.innerWidth - width * visible)),
+    y: Math.min(Math.max(minY, y), Math.max(minY, window.innerHeight - height * visible)),
+  };
+}
 
 const STYLE_ID = "pet-dock-css";
 const CSS = `
@@ -97,8 +105,8 @@ export interface PetDockProps {
   /** 悬停才浮现的入口按钮（📓 日志 / 🧬 物种卡） */
   actions?: ReactNode;
   /** 是否已静音气泡（右键菜单切换） */
-  bubblesHidden: boolean;
-  onToggleBubbles: () => void;
+  promptsEnabled: boolean;
+  onTogglePrompts: () => void;
 }
 
 export function PetDock({
@@ -109,117 +117,88 @@ export function PetDock({
   onDismiss,
   onPoke,
   actions,
-  bubblesHidden,
-  onToggleBubbles,
+  promptsEnabled,
+  onTogglePrompts,
 }: PetDockProps) {
   useInjectedStyle();
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   /** 悬停入口按钮所在容器，用于把按钮区域并入热区 */
   const actionsRef = useRef<HTMLDivElement | null>(null);
-  const pressTimerRef = useRef<number | null>(null);
-  const draggingRef = useRef(false);
-  const suppressClickRef = useRef(false);
-  const movedRef = useRef(false);
-  /** 正在进行的拖拽的拆除函数，卸载时兜底 */
-  const teardownRef = useRef<(() => void) | null>(null);
+  const pointer = useRef<{ id: number; x: number; y: number; rect: DOMRect; moved: boolean; walkX: number } | null>(null);
+  const animationFrame = useRef<number | null>(null);
+  const pendingPosition = useRef<Position | null>(null);
 
   /** 被拖走后的落脚点；null = 用默认锚点 */
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [pos, setPos] = useState<Position | null>(null);
+  const [scale, setScale] = useState(100);
   /** 右键菜单位置（视口坐标）；null = 未打开 */
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   /** 入口按钮是否浮现（鼠标靠近桌宠或按钮区域时显示） */
   const [actionsOpen, setActionsOpen] = useState(false);
-  /** 是否处于长按拖动中（只影响光标形状，不能常驻 pressing 状态） */
   const [dragging, setDragging] = useState(false);
-
-  const clearPressTimer = () => {
-    if (pressTimerRef.current !== null) {
-      window.clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
-  };
+  const [dragWalkX, setDragWalkX] = useState(0);
+  const petWidth = PET_BOX_W * scale / 100;
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 || isInteractiveTarget(e.target)) return;
+    if (e.button !== 0 || pointer.current || isInteractiveTarget(e.target)) return;
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-
-    const origin = {
-      x: e.clientX,
-      y: e.clientY,
-      left: rect.left,
-      top: rect.top,
-      w: rect.width,
-      h: rect.height,
-    };
-    movedRef.current = false;
-    draggingRef.current = false;
-
-    const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - origin.x;
-      const dy = ev.clientY - origin.y;
-      if (Math.abs(dx) > DRAG_SLOP || Math.abs(dy) > DRAG_SLOP) movedRef.current = true;
-      if (!draggingRef.current) return;
-      // 左右 / 上下都至少留 KEEP_VISIBLE 比例在屏内，桌宠不会被拖到只剩一角
-      const keepW = origin.w * KEEP_VISIBLE;
-      const keepH = origin.h * KEEP_VISIBLE;
-      const minX = keepW - origin.w;
-      const minY = keepH - origin.h;
-      // 视口小于桌宠时区间会反转，用 max 兜底成单点，避免抖动
-      const maxX = Math.max(minX, window.innerWidth - keepW);
-      const maxY = Math.max(minY, window.innerHeight - keepH);
-      setPos({
-        x: Math.min(Math.max(minX, origin.left + dx), maxX),
-        y: Math.min(Math.max(minY, origin.top + dy), maxY),
-      });
-    };
-
-    const onUp = () => {
-      clearPressTimer();
-      if (draggingRef.current) {
-        draggingRef.current = false;
-        setDragging(false);
-        if (mode === "window") window.petAPI?.dragEnd();
-        // 拖动松手后往往还会补一个 click，别让它变成「戳」
-        suppressClickRef.current = true;
-        window.setTimeout(() => {
-          suppressClickRef.current = false;
-        }, SUPPRESS_CLICK_MS);
-      }
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      teardownRef.current = null;
-    };
-
-    clearPressTimer();
-    pressTimerRef.current = window.setTimeout(() => {
-      pressTimerRef.current = null;
-      draggingRef.current = true;
-      setDragging(true);
-      // window 模式：让主进程在拖动期间保持「不穿透」，
-      // 否则指针一甩出桌宠，主进程立刻恢复穿透、pointermove 就断了。
-      if (mode === "window") window.petAPI?.dragStart();
-      // 接管当前位置，避免一按下就跳到锚点
-      setPos({ x: origin.left, y: origin.top });
-    }, LONG_PRESS_MS);
-
-    teardownRef.current = () => {
-      clearPressTimer();
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    pointer.current = { id: e.pointerId, x: e.clientX, y: e.clientY, rect, moved: false, walkX: petX };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (mode === "window") window.petAPI?.dragStart();
   };
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const origin = pointer.current;
+    if (!origin || origin.id !== e.pointerId) return;
+    const dx = e.clientX - origin.x;
+    const dy = e.clientY - origin.y;
+    const starting = !origin.moved;
+    if (starting) {
+      if (Math.hypot(dx, dy) < DRAG_SLOP) return;
+      origin.moved = true;
+      setDragWalkX(origin.walkX);
+      setDragging(true);
+    }
+    const rect = origin.rect;
+    const next = keepOnScreen(rect.left + dx, rect.top + dy, rect.width, rect.height);
+    pendingPosition.current = { x: next.x - origin.walkX, y: next.y };
+    if (starting) {
+      setPos(pendingPosition.current);
       return;
     }
-    if (movedRef.current || isInteractiveTarget(e.target)) return;
-    onPoke();
+    if (animationFrame.current !== null) return;
+    animationFrame.current = window.requestAnimationFrame(() => {
+      animationFrame.current = null;
+      setPos(pendingPosition.current);
+    });
+  };
+
+  const finishPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    const origin = pointer.current;
+    if (!origin || origin.id !== e.pointerId) return;
+    pointer.current = null;
+    if (animationFrame.current !== null) {
+      window.cancelAnimationFrame(animationFrame.current);
+      animationFrame.current = null;
+    }
+    if (origin.moved && pendingPosition.current) setPos(pendingPosition.current);
+    pendingPosition.current = null;
+    setDragging(false);
+    if (mode === "window") window.petAPI?.dragEnd();
+    if (!origin.moved && e.type === "pointerup") onPoke();
+  };
+
+  const resizePet = (nextScale: number) => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect || nextScale === scale) return;
+    const factor = nextScale / scale;
+    const width = rect.width * factor;
+    const height = rect.height * factor;
+    const next = keepOnScreen(rect.left + (rect.width - width) / 2, rect.top + (rect.height - height) / 2, width, height, 1);
+    setPos({ x: next.x - petX, y: next.y });
+    setScale(nextScale);
   };
 
   const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -230,13 +209,12 @@ export function PetDock({
     });
   };
 
-  /* 卸载时清掉可能还挂着的拖拽监听（ref 稳定，空依赖即可） */
   useEffect(
     () => () => {
-      if (pressTimerRef.current !== null) window.clearTimeout(pressTimerRef.current);
-      teardownRef.current?.();
+      if (animationFrame.current !== null) window.cancelAnimationFrame(animationFrame.current);
+      if (pointer.current && mode === "window") window.petAPI?.dragEnd();
     },
-    [],
+    [mode],
   );
 
   /* 悬停入口热区：桌宠本体 + 按钮容器各外扩 HOVER_PAD，
@@ -287,10 +265,10 @@ export function PetDock({
      居中才能让左右溜达的余量一致。 */
   const anchorClass =
     pos !== null
-      ? "fixed w-[200px]"
+      ? "fixed"
       : mode === "window"
-        ? "absolute bottom-14 left-1/2 w-[200px] -translate-x-1/2"
-        : "absolute bottom-8 right-56 w-[200px]";
+        ? "absolute bottom-14 left-1/2"
+        : "absolute bottom-8 right-56";
 
   /* 入口按钮列的横向位置：用一个连续的 translateX 表达（不再切换 left-/right-full
      布局类，否则换边是瞬时的、会「跳」）。基准位固定为「桌宠盒子右侧 12px」
@@ -304,16 +282,18 @@ export function PetDock({
     if (!hasActions) return;
     const measure = () => {
       const r = rootRef.current?.getBoundingClientRect();
-      setFit({ left: r ? r.left : 0, vw: window.innerWidth });
+      const walkOffset = r && rootRef.current ? new DOMMatrix(getComputedStyle(rootRef.current).transform).m41 : 0;
+      setFit({ left: r ? r.left - walkOffset : 0, vw: window.innerWidth });
     };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [hasActions, mode, pos]);
+  }, [hasActions, mode, petWidth]);
 
+  const walkX = dragging ? dragWalkX : petX;
   const canRight =
-    fit.vw === 0 || fit.left + petX + BTN_RIGHT_EDGE + BTN_W <= fit.vw;
-  const btnDx = canRight ? petX + BTN_SIDE_SHIFT : petX;
+    fit.vw === 0 || (pos?.x ?? fit.left) + walkX + petWidth + BTN_GAP + BTN_W <= fit.vw;
+  const btnDx = canRight ? petWidth + 2 * BTN_GAP + BTN_W : 0;
 
   return (
     <>
@@ -323,13 +303,23 @@ export function PetDock({
         className={[
           "select-none touch-none",
           anchorClass,
-          dragging ? "cursor-grabbing" : "cursor-pointer",
+          dragging ? "cursor-grabbing" : "cursor-grab",
         ]
           .filter(Boolean)
           .join(" ")}
-        style={pos ? { left: pos.x, top: pos.y } : undefined}
+        style={{
+          width: petWidth,
+          left: pos?.x,
+          top: pos?.y,
+          marginLeft: !pos && mode === "window" ? -petWidth / 2 : undefined,
+          transform: `translateX(${walkX}px)`,
+          transition: dragging ? "none" : `transform ${WALK_MS}ms linear`,
+        }}
         onPointerDown={handlePointerDown}
-        onClick={handleClick}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishPointer}
+        onPointerCancel={finishPointer}
+        onLostPointerCapture={finishPointer}
         onContextMenu={handleContextMenu}
       >
         <div className="pd-in relative">
@@ -339,7 +329,7 @@ export function PetDock({
           <AnchoredObservationBubble
             items={queue}
             onDismiss={onDismiss}
-            muted={bubblesHidden}
+            muted={!promptsEnabled}
             anchor={<span />}
             anchorClassName="pointer-events-none absolute inset-0"
             placement="top"
@@ -347,14 +337,7 @@ export function PetDock({
 
           {/* 桌宠本体：与按钮同处一条 transform 曲线（WALK_MS linear），
               两边一起平移，看上去就是「平行移动」。 */}
-          <div
-            className="relative"
-            title="戳一戳 · 长按拖动"
-            style={{
-              transform: `translateX(${petX}px)`,
-              transition: `transform ${WALK_MS}ms linear`,
-            }}
-          >
+          <div className="relative" title="单击互动 · 按住拖动 · 右键缩放">
             <Pet pet_state={petState} />
           </div>
 
@@ -374,10 +357,19 @@ export function PetDock({
               ].join(" ")}
               style={{
                 transform: `translate(${btnDx}px, -50%)`,
-                transition: `transform ${WALK_MS}ms linear, opacity 200ms`,
+                transition: "opacity 200ms",
               }}
             >
               {actions}
+              <Button
+                type="default"
+                size="small"
+                aria-pressed={promptsEnabled}
+                title="显示或隐藏桌宠提示"
+                onClick={onTogglePrompts}
+              >
+                提示 {promptsEnabled ? "开" : "关"}
+              </Button>
             </div>
           ) : null}
         </div>
@@ -398,7 +390,7 @@ export function PetDock({
             />
             <div
               data-pet-hit
-              className="fixed z-50 min-w-[176px] overflow-hidden rounded-xl py-1 text-[13px]"
+              className="fixed z-50 w-[208px] overflow-hidden rounded-xl py-1 text-[13px]"
               style={{
                 left: menu.x,
                 top: menu.y,
@@ -409,15 +401,30 @@ export function PetDock({
               }}
               onPointerDown={(e) => e.stopPropagation()}
             >
+              <label className="flex items-center gap-2 px-3 py-2">
+                <span>大小</span>
+                <input
+                  type="range"
+                  min={MIN_SCALE}
+                  max={MAX_SCALE}
+                  step={5}
+                  value={scale}
+                  className="min-w-0 flex-1 accent-sky-400"
+                  onChange={(e) => resizePet(e.currentTarget.valueAsNumber)}
+                />
+                <button type="button" title="恢复 100%" className="w-10 tabular-nums hover:text-sky-300" onClick={() => resizePet(100)}>
+                  {scale}%
+                </button>
+              </label>
               <button
                 type="button"
                 className="block w-full px-3 py-2 text-left hover:bg-white/10"
                 onClick={() => {
-                  onToggleBubbles();
+                  onTogglePrompts();
                   setMenu(null);
                 }}
               >
-                {bubblesHidden ? "💬 显示气泡" : "🤫 隐藏气泡"}
+                {promptsEnabled ? "🤫 关闭提示" : "💬 显示提示"}
               </button>
               {mode === "window" ? (
                 <button

@@ -1,7 +1,7 @@
 # 人类观察站 · 使用说明
 
 > 一个把**摄像头里的人类**当成外星物种来观察的桌宠。
-> 它用 Pose 认出你的进出、伸展、喝水，用 VLM 给「喝水」这种模糊动作下判决，
+> 它在本机识别进出、伸展、嘴角上扬和举杯等动作，
 > 然后由桌宠用外星研究员的语气把这件事念出来。
 >
 > **Aha Moment**：你在镜头前喝一口水 → 桌宠歪头看向你：「目标正在为内部海洋补充液体。」
@@ -76,16 +76,48 @@
 
 ## 3. 快速开始
 
+首次下载源码后，在仓库根目录创建 `models/`，下载以下模型并保留文件名：
+
+- 姿态检测：[pose_landmarker_lite.task](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task)
+- 表情检测：[face_landmarker.task](https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task)
+- 手机和杯瓶检测：[efficientdet_lite0.tflite](https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite)
+
+Windows 可用 Python 3.11 与 Node.js 20+。在项目根目录准备后端和视觉环境：
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install fastapi uvicorn
+py -3.11 -m venv .venv-vision
+.\.venv-vision\Scripts\python.exe -m pip install -r vision\requirements.txt
+Copy-Item .env.example .env
+```
+
+从项目根目录打开三个 PowerShell 窗口，分别运行以下命令：
+
+```powershell
+# 后端
+.\.venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8001
+
+# 前端
+Set-Location frontend
+npm.cmd ci
+npm.cmd run dev -- --hostname 127.0.0.1
+
+# 视觉
+.\.venv-vision\Scripts\python.exe -u -m vision.main --phone-seconds 8
+```
+
+浏览器访问 `http://127.0.0.1:3000/pet`。要在 Windows 桌面显示独立窗口，从项目根目录另开终端，进入 `desktop`，依次运行 `npm.cmd ci` 与 `npm.cmd run pet`。首次启动会下载 Electron。演示时用 `--phone-seconds 8`，日常运行去掉这个参数即可恢复 60 秒。
+
 ### 3.1 一键启动（推荐）
 
 ```bash
 cd /Users/syyz/hacker
 
-# 第一次：准备密钥（不填也能跑，只是「喝水」识别不出结果）
+# 第一次：准备本机配置，默认本地识别不需要密钥
 cp .env.example .env
-$EDITOR .env                      # 填 VLM_API_KEY=sk-xxxxxx
 
-./scripts/dev-up.sh               # 后端 → 前端 → 视觉(VLM) → 桌宠
+./scripts/dev-up.sh               # 后端 → 前端 → 视觉 → 桌宠
 ./scripts/dev-down.sh             # 全部停掉
 ```
 
@@ -149,9 +181,9 @@ python3 -u -m vision.main --source http://<手机IP>:8080/video   # 用手机当
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `VLM_API_KEY` | 空 | **喝水裁决必填**；没有它喝水检测直接返回 `NONE`，其余功能照常 |
+| `VLM_API_KEY` | 空 | 仅在通过 `--cloud-drinking` 启用云端喝水裁决时需要 |
 | `VLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | VLM 的 OpenAI 兼容地址 |
-| `VLM_MODEL` | `qwen-vl-plus` | 也可换 `qwen3-vl-plus` / `qwen-vl-max`（需账号有权限） |
+| `VLM_MODEL` | `qwen3-vl-plus` | 云端视觉模型，需账号有权限 |
 | `VLM_TIMEOUT` | `15` | 单次 VLM 请求超时（秒） |
 | `BACKEND_BASE_URL` | 空 | B 的地址，如 `http://localhost:8001`；**不填则只打日志、不发请求** |
 | `BACKEND_TIMEOUT` | `5` | 发给 B 的请求超时（秒） |
@@ -191,6 +223,10 @@ python3 -m venv .venv-vision
 ## 5. 你会看到什么（验收 / 演示脚本）
 
 ### 5.1 演示三连
+
+**本地演示模式**：视觉进程默认用杯子或水瓶与嘴部、手部的位置关系判断喝水动作。需要让杯子和拿杯子的手入镜。显式传入 `--cloud-drinking` 才会使用云端裁决并发送摄像头关键帧。
+
+新增记录包括举单手、双臂平举、微笑、持续张嘴、持续手持手机、摸头、触碰眼周、身前双手合拢。`--phone-seconds 8` 可把手机提醒设为 8 秒用于演示，默认 60 秒。
 
 | 你做什么 | 桌宠说什么（`message`） | `event` | `pet_state` |
 | --- | --- | --- | --- |

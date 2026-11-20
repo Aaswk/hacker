@@ -16,7 +16,7 @@ declare global {
     /** 恒为 true；存在即代表跑在 Electron 壳里 */
     isDesktop: boolean;
     /** 上报「哪些区域算桌宠」；主进程据此轮询光标决定整窗是否穿透 */
-    setHitRects(rects: PetHitRect[]): void;
+    setHitRects(rects: PetHitRect[], visuals?: PetHitRect[]): void;
     /** 长按拖动开始 / 结束（主进程轮询屏幕坐标移窗） */
     dragStart(): void;
     dragEnd(): void;

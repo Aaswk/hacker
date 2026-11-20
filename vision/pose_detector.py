@@ -30,16 +30,13 @@ import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmark
 
 # 姿态检测器（0.10.9）
 BaseOptions = python.BaseOptions
 PoseLandmarker = vision.PoseLandmarker
 PoseLandmarkerOptions = vision.PoseLandmarkerOptions
 RunningMode = vision.RunningMode
-
-# 关键点枚举在这里！不是 tasks.vision，是 solutions.pose
-PoseLandmark = mp.solutions.pose.PoseLandmark
-
 
 # 项目根目录（vision/ 的上一级）下的 models/ 目录
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent

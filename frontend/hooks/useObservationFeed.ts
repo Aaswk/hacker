@@ -8,7 +8,7 @@ import type { Observation } from "@/types/contract";
 export interface UseObservationFeedOptions {
   /** 只在"开始观察"后轮询，避免无人观察时白跑 */
   enabled: boolean;
-  /** 轮询间隔，默认 2000ms（对齐 B 段约定） */
+  /** 轮询间隔，默认 500ms */
   intervalMs?: number;
   /**
    * 仅对"本地未见过的 observation_id"触发（按 id 升序）。
@@ -34,7 +34,7 @@ export interface UseObservationFeedResult {
  */
 export function useObservationFeed({
   enabled,
-  intervalMs = 2000,
+  intervalMs = 500,
   onObservation,
 }: UseObservationFeedOptions): UseObservationFeedResult {
   const [observations, setObservations] = useState<Observation[]>([]);

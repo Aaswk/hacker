@@ -11,8 +11,8 @@ contextBridge.exposeInMainWorld("petAPI", {
    * 上报「哪些区域算桌宠」——窗口内 CSS 像素的矩形数组。
    * 主进程据此轮询光标位置决定整窗是否穿透（不再依赖 mousemove 转发）。
    */
-  setHitRects(rects) {
-    ipcRenderer.send("pet:hit-rects", rects);
+  setHitRects(rects, visuals) {
+    ipcRenderer.send("pet:hit-rects", rects, visuals);
   },
   /** 长按拖动桌宠开始 / 结束（窗口已铺满屏，主进程只据此保持可交互） */
   dragStart() {

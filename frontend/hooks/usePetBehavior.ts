@@ -41,7 +41,7 @@ interface QueuedBubble extends ObservationBubbleItem {
    * - observation：B 下发的真实观察（Step 5），永不丢弃，队列满时挤掉一条环境气泡
    * - ambient：本机待机小剧场 / 用户行为反应，队列满时直接丢掉
    */
-  source: "observation" | "ambient";
+  source: "observation" | "ambient" | "periodic";
 }
 
 /* 预览用台词池：同一动作多条文本，随机播放其中一条。
@@ -51,38 +51,38 @@ const POOL: Record<BubbleTone, string[]> = {
   normal: [
     "观测体 №001 摄入透明液体，本次为今日第 3 次",
     "观测体 №001 保持同一坐姿超过 40 分钟，疑似进入低功耗",
-    "观测体 №001 反复注视发光板子，专注时长异常",
-    "观测体 №001 发出几个音节，未检测到含义，已归档",
+    "观测体 №001 看向发光板，记录员想看看它在播什么",
+    "今天又学到几个地球音节。我的词典还在努力跟上",
     "观测体 №001 挠头 2 次，推测正在思考，继续观察",
-    "观测体 №001 对着发光板子叹气，叹息成分待化验",
-    "观测体 №001 左右张望 4 次，附近并没有值得张望的东西",
-    "观测体 №001 揉了揉眼睛，随后继续注视发光板子。恒心可嘉",
-    "检测到 观测体 №001 的坐姿已从「端正」降级为「融化」",
-    "观测体 №001 打了一个哈欠，嘴部张合幅度创本日新高",
-    "观测体 №001 似乎在低声与发光板子争执，板子拒不回应",
+    "发光板今天很安静，我的记录笔也想歇一会儿",
+    "观测体 №001 看了看左右两侧。我的记录笔也跟着转了一圈",
+    "观测体 №001 把手抬到眼边，记录员记下了这一幕",
+    "观测体 №001 换了个舒服的姿势。我的小椅子也想试试",
+    "捕捉到一枚地球哈欠。记录笔差点也打了个哈欠",
+    "发光板一闪一闪，像在给我的记录本打招呼",
     "观测体 №001 伸手够向桌角，动作熟练，疑似日常仪式",
-    "观测体 №001 的视线在屏幕与本子之间来回搬运，效率未知",
+    "观测体 №001 看看屏幕，又看看本子。记录员也翻到下一页",
     "记录：观测体 №001 又一次对自己说了句「马上就好」",
   ],
   alert: [
     "观测体 №001 突然离开视野范围，未记录到离场原因",
     "检测到 观测体 №001 高速位移，已切换追踪模式",
-    "观测体 №001 发出高频声波，来源不明，警戒中",
-    "观测体 №001 起身速度异常，请全体研究员扶稳记录本",
-    "警报：观测体 №001 的手伸向了不该伸向的地方",
-    "观测体 №001 位置突变，本次移动未提交任何申请",
+    "观察舱里传来了新动静，记录员竖起了耳朵",
+    "观测体 №001 起身了，记录员赶紧扶稳小本子",
+    "一只手进入了画面，记录员忙把小本子翻开",
+    "观测体 №001 换了位置，记录员也挪了挪小椅子",
     "监测到 观测体 №001 大幅后仰，椅子发出了求救信号",
-    "观测体 №001 猛地回头，与本观察舱对视 0.4 秒，随后装作无事发生",
+    "观测体 №001 回头看了一眼。你好呀，地球朋友",
   ],
   discover: [
     "首次观察到 观测体 №001 双臂上举后仰，新行为已归档",
-    "观测体 №001 摄入黑色液体后短时效率提升，值得持续观察",
-    "观测体 №001 对着发光板子露出牙齿，疑似威胁展示？",
-    "重大发现：观测体 №001 竟能一边发呆一边打字，本所暂无解释",
+    "观测体 №001 举起了杯子。那边是地球饮品，这边是我的星星茶",
+    "发现一枚地球微笑，把它夹在今天的记录本里",
+    "发现人类在键盘上敲出了一段小节奏。嗒、嗒、嗒",
     "首次记录到 观测体 №001 对空气点头，回应对象不明",
-    "观测体 №001 突然无声发笑，笑点不在监控范围内",
-    "新行为归档：观测体 №001 把两件事同时忘掉，又同时想起",
-    "检测到 观测体 №001 的自我辩解行为，逻辑自洽度约 61%",
+    "观测体 №001 笑了，记录员顺手画了一颗小星星",
+    "新行为归档。我的小本子又可以贴一张贴纸了",
+    "记录员又学到一个地球动作，决定给它留一整页",
   ],
 };
 
@@ -97,8 +97,8 @@ const CHAT = [
   "今天的日志上我写下「一切正常」，这是最省事也最准确的一句",
   "有点饿了。外星人也会饿，只是我们的饿不写在脸上",
   "观察舱的窗外没什么可看的，但我还是会看。习惯跨物种通用",
-  "数了数今天的记录条目，比我预想的多。人类真是费笔",
-  "安静的时候我会听舱里的通风声，它比人类的对话好懂",
+  "数了数今天的记录条目，我的小铅笔可真勤快",
+  "安静的时候，我会跟着观察舱的通风声哼一小段",
   "本所规定每两小时休息一次。我一直遵守，毕竟规定是我写的",
 ];
 
@@ -109,12 +109,12 @@ const ALIEN = [
   "本星有个节日叫「不回应节」，那天谁都不许回答任何问题。人类听了很羡慕",
   "我们那边的天空是绿的。第一次见到人类的蓝天时，我以为屏幕坏了",
   "本所同期还有研究员在观察「猫」，进度比我快，因为它根本不动",
-  "我们星球的成年人睡前会数今天撒了几个谎。我一般是零，因为我很少说话",
+  "我们星球睡前会数星星。我每次都在数到第七颗时睡着",
   "本星的门都不上锁，因为没人想进去。人类的门都锁着，这点我研究很久了",
 ];
 
 const MUTTER = [
-  "（思索）……如果把「发呆」也算一种行为，观测体 №001 今天的成就相当可观",
+  "（思索）安静也是观察的一部分。我的记录笔正好晒晒太阳",
   "（思索）我总觉得观察这件事，看得越久越不明白。但记录还是要记的",
   "（打量陈设）舱里这张桌子的左边角磨损严重，说明人类也常坐这一侧",
   "（打量陈设）记录本快写完了，页脚卷了起来，和上上次一样",
@@ -135,10 +135,10 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     cd: 9000,
     texts: [
       "检测到 观测体 №001 高速位移，已切换追踪模式",
-      "观测体 №001 移动速度远超日常记录，警戒中",
-      "警告：观察舱内出现不明高速物体，疑似人类手臂",
-      "观测体 №001 的运动轨迹无法预测，建议保持距离",
-      "目标剧烈移动，本所的镜头追得很辛苦",
+      "刚才有一阵快速移动，记录员的小笔差点没跟上",
+      "观察舱里掠过一道影子。嗖，记下来啦",
+      "刚才的移动像一颗小流星，记录员画了一条尾巴",
+      "画面里有一阵动静，记录员把小本子往前挪了挪",
       "检测到突发位移，已默默把记录笔握紧了",
     ],
   },
@@ -148,8 +148,8 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "观测体 №001 突然离开视野范围，未记录到离场原因",
       "目标丢失！观测体 №001 消失在观察窗边缘",
-      "观测窗空了。没有告别，没有解释",
-      "观测体 №001 撤离迅速，疑似有要事，也可能只是想走",
+      "观察窗暂时空了，记录员帮你把这一页夹好了",
+      "观测体 №001 暂时离开了，记录员把小椅子留在这里",
       "信号中断：观测体 №001 已不在监测半径内",
     ],
   },
@@ -158,7 +158,7 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     cd: 6000,
     texts: [
       "观测体 №001 回到视野范围，恢复记录",
-      "目标重新上线，看起来和离开时一样",
+      "欢迎回来，刚才的书签还在这里",
       "观测体 №001 归位，本所松了一口气并假装没松",
       "观察对象返回，档案继续，笔尖继续",
     ],
@@ -169,9 +169,9 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "观测体 №001 已长时间保持静止，疑似进入待机",
       "观测体 №001 迟迟没有新动作，本研究员先记一笔",
-      "静止时长刷新纪录，暂无证据表明它已睡着",
-      "观测体 №001 一动不动，本所开始怀疑是不是卡住了",
-      "长时间无动作。已归档为「冥想」，虽然并无依据",
+      "观察窗安静了一会儿，连星星都放轻了脚步",
+      "观察舱安静了一会儿，我先给记录本翻个页",
+      "现在是安静时刻，我也把小耳朵放松一下",
     ],
   },
   tap: {
@@ -180,9 +180,9 @@ const TRIGGER: Record<UserKind, { tone: BubbleTone; cd: number; texts: string[] 
     texts: [
       "首次记录到 观测体 №001 主动接触观察舱，重大发现！",
       "观测体 №001 在敲玻璃！它看得见我？！",
-      "检测到观察舱受到触碰，来源：观测体 №001。挑衅还是打招呼？",
+      "有人来打招呼啦！我用小爪子回你一下",
       "观测体 №001 主动发起接触，本所首次成为被观察的一方",
-      "接触事件！已回放三遍，仍未确定它的意图",
+      "叮，收到问候！在今日互动栏贴一颗星星",
     ],
   },
 };
@@ -215,8 +215,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
    本场会话统计 + 「主动检测」延伸分析
    ------------------------------------------------------------------
    主动检测尚未接入 C 的动作识别（端口 8002）。这里先用本机能统计到的
-   行为计数（在场时长 / 主动接触 / 高速位移 / 离席）模拟几类检测结论，
-   措辞保持「田野记录 + 数据外推」的调性，避免像真的医疗建议。
+   行为计数（会话时长 / 点击次数 / 鼠标快速移动 / 鼠标离开）生成互动小结。
    等 C 的动作识别就绪，把 analysisLines 换成 B/C 下发的观测即可。
    ------------------------------------------------------------------ */
 interface SessionStats {
@@ -238,31 +237,30 @@ interface AnalysisLine {
 
 function analysisLines(s: SessionStats, now: number): AnalysisLine[] {
   const mins = Math.max(1, Math.floor((now - (s.startedAt || now)) / 60000));
-  const idleMins = s.lastMoveAt > 0 ? Math.max(0, Math.floor((now - s.lastMoveAt) / 60000)) : 0;
   return [
     {
       tone: "normal",
-      text: `延伸分析：本场观察已进行 ${mins} 分钟，观测体 №001 主动接触 ${s.taps} 次，互动意愿指数 +${Math.min(90, s.taps * 7)}%`,
+      text: `观察小结：今天已经一起待了约 ${mins} 分钟，收到 ${s.taps} 次桌宠点击`,
     },
     {
       tone: "alert",
-      text: `久坐预警：观测体 №001 已连续静止 ${idleMins} 分钟，痔疮风险较基准上涨 ${(idleMins * 0.05).toFixed(2)}%`,
+      text: `观察舱安静了一会儿。我们可以一起伸个懒腰`,
     },
     {
       tone: "alert",
-      text: `长时静默：静止累计 ${idleMins} 分钟，颈椎与手腕的磨损率同步上涨 ${(idleMins * 0.03).toFixed(2)}%`,
+      text: `我的记录笔要休息一下，你也可以趁机喝口水`,
     },
     {
       tone: "normal",
-      text: `延伸分析：本场记录到 ${s.fasts} 次高速位移，推算 观测体 №001 今日代谢水平偏高 ${Math.min(40, s.fasts * 6)}%`,
+      text: `互动小结：这次记下了 ${s.fasts} 次鼠标快速移动。嗖，像小流星`,
     },
     {
       tone: "normal",
-      text: `延伸分析：本场离席 ${s.leaves} 次，平均专注周期约 ${Math.max(1, Math.floor(mins / Math.max(1, s.leaves + 1)))} 分钟`,
+      text: `互动小结：鼠标离开观察舱 ${s.leaves} 次。小书签一直夹在原处`,
     },
     {
       tone: "discover",
-      text: `趋势推测：按当前接触频率，观测体 №001 对本观察舱的信任度约 ${Math.min(99, 30 + s.taps * 9)}%，建议继续投喂好奇心`,
+      text: `记录员的小本子又多了几行。谢谢你来地球观察站串门`,
     },
   ];
 }
@@ -272,6 +270,15 @@ export function usePetBehavior() {
   const [actState, setActState] = useState<PetVisualState>("IDLE");
   const [queue, setQueue] = useState<QueuedBubble[]>([]);
   const [petX, setPetX] = useState(0);
+  const [promptsEnabled, setPromptsEnabled] = useState(true);
+  const promptsEnabledRef = useRef(true);
+
+  const togglePrompts = useCallback(() => {
+    const enabled = !promptsEnabledRef.current;
+    promptsEnabledRef.current = enabled;
+    setPromptsEnabled(enabled);
+    if (!enabled) setQueue((current) => current.filter((item) => item.source !== "periodic"));
+  }, []);
 
   const head = queue[0];
 
@@ -348,8 +355,9 @@ export function usePetBehavior() {
       tone: BubbleTone,
       message?: string,
       state?: PetVisualState,
-      source: "observation" | "ambient" = "ambient"
+      source: QueuedBubble["source"] = "ambient"
     ) => {
+      if (source === "periodic" && !promptsEnabledRef.current) return;
       seq.current += 1;
       const item: QueuedBubble = {
         id: seq.current,
@@ -360,6 +368,10 @@ export function usePetBehavior() {
       };
 
       setQueue((q) => {
+        // A new observation can immediately replace an ambient bubble.
+        if (source === "observation" && q[0] && q[0].source !== "observation") {
+          return [...q.filter((entry) => entry.source === "observation"), item];
+        }
         // B 的真实观察优先级最高：ALERT 插到队首（但不打断已在播的 ALERT）
         if (source === "observation" && state === "ALERT") {
           const headIsAlert = q.length > 0 && q[0].state === "ALERT";
@@ -368,9 +380,9 @@ export function usePetBehavior() {
         if (q.length < QUEUE_LIMIT) return [...q, item];
         // 队列已满：
         // - ambient（本机闲聊）直接丢弃，避免挤爆队列
-        if (source === "ambient") return q;
+        if (source !== "observation") return q;
         // - observation（B 的真实观察）永不丢弃：挤掉一条最旧的 ambient 再入队
-        const victim = q.findIndex((it) => it.source === "ambient");
+        const victim = q.findIndex((it) => it.source !== "observation");
         if (victim === -1) return q;
         const next = q.slice();
         next.splice(victim, 1);
@@ -386,7 +398,7 @@ export function usePetBehavior() {
 
   /** 触发一类用户行为反应；返回是否真的触发（冷却中为 false） */
   const trigger = useCallback(
-    (kind: UserKind) => {
+    (kind: UserKind, source: "ambient" | "periodic" = "ambient") => {
       const spec = TRIGGER[kind];
       const now = Date.now();
       if (coolRef.current[kind] > now) return false;
@@ -395,7 +407,7 @@ export function usePetBehavior() {
       if (kind === "tap") statsRef.current.taps += 1;
       else if (kind === "fast") statsRef.current.fasts += 1;
       else if (kind === "leave") statsRef.current.leaves += 1;
-      push(spec.tone, pickFresh("trg:" + kind, spec.texts));
+      push(spec.tone, pickFresh("trg:" + kind, spec.texts), undefined, source);
       return true;
     },
     [push]
@@ -460,8 +472,10 @@ export function usePetBehavior() {
         queueRef.current.length === 0
       ) {
         statsRef.current.lastMoveAt = now;
-        trigger("still");
-        return;
+        if (promptsEnabledRef.current) {
+          trigger("still", "periodic");
+          return;
+        }
       }
 
       const idle =
@@ -472,8 +486,10 @@ export function usePetBehavior() {
       if (!idle && now >= nextScanAtRef.current) {
         nextScanAtRef.current = now + rand(120000, 200000);
         const line = pickFresh("scan:analysis", analysisLines(statsRef.current, now));
-        push(line.tone, line.text);
-        return;
+        if (promptsEnabledRef.current) {
+          push(line.tone, line.text, undefined, "periodic");
+          return;
+        }
       }
 
       if (now < nextActAtRef.current) return;
@@ -490,11 +506,11 @@ export function usePetBehavior() {
       } else if (r < 0.90) {
         playAct("THINKING", 4600); // 掏出笔记本整理观察记录
       } else if (r < 0.94) {
-        push("normal", pickFresh("chat", CHAT)); // 无事闲聊
+        push("normal", pickFresh("chat", CHAT), undefined, "periodic");
       } else if (r < 0.97) {
-        push("normal", pickFresh("alien", ALIEN)); // 外星趣事分享
+        push("normal", pickFresh("alien", ALIEN), undefined, "periodic");
       } else {
-        push("normal", pickFresh("mutter", MUTTER)); // 自说自话
+        push("normal", pickFresh("mutter", MUTTER), undefined, "periodic");
       }
     }, 1200);
     return () => window.clearInterval(iv);
@@ -532,6 +548,8 @@ export function usePetBehavior() {
     petState,
     queue,
     petX,
+    promptsEnabled,
+    togglePrompts,
     push,
     dismiss,
     onPetClick,

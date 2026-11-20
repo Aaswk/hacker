@@ -18,6 +18,16 @@ class Event(str, Enum):
     STRETCHING = "STRETCHING"
     PERSON_LEFT = "PERSON_LEFT"
     PERSON_RETURNED = "PERSON_RETURNED"
+    HAND_RAISE = "HAND_RAISE"
+    ARMS_OUT = "ARMS_OUT"
+    SMILING = "SMILING"
+    MOUTH_OPEN = "MOUTH_OPEN"
+    PHONE_HELD_LONG = "PHONE_HELD_LONG"
+    HEAD_TOUCH = "HEAD_TOUCH"
+    EYE_TOUCH = "EYE_TOUCH"
+    HANDS_TOGETHER = "HANDS_TOGETHER"
+    GLASSES_ON = "GLASSES_ON"
+    GLASSES_OFF = "GLASSES_OFF"
     UNKNOWN = "UNKNOWN"
 
 
@@ -83,6 +93,16 @@ NARRATIVE = {
     Event.STRETCHING: (PetState.ALERT, "目标正在扩大身体面积，原因有待观察。"),
     Event.PERSON_LEFT: (PetState.ALERT, "观察对象离开了视野。"),
     Event.PERSON_RETURNED: (PetState.EXCITED, "观测体 №001 再次出现。"),
+    Event.HAND_RAISE: (PetState.CURIOUS, "观测体举起一只手，疑似正在申请发言。"),
+    Event.ARMS_OUT: (PetState.ALERT, "观测体展开双臂，正在测量自身翼展。"),
+    Event.SMILING: (PetState.EXCITED, "观测体嘴角上扬，记录一次微笑。"),
+    Event.MOUTH_OPEN: (PetState.CURIOUS, "观测体持续张开嘴部，暂未确认用途。"),
+    Event.PHONE_HELD_LONG: (PetState.ALERT, "观测体已持续拿着便携发光板，建议放下手机休息一下。"),
+    Event.HEAD_TOUCH: (PetState.CURIOUS, "观测体把手放到头顶，正在触碰头部。"),
+    Event.EYE_TOUCH: (PetState.CURIOUS, "观测体的手靠近眼周，记录一次眼周接触动作。"),
+    Event.HANDS_TOGETHER: (PetState.CURIOUS, "观测体在身前合拢双手，暂时无法解读这个信号。"),
+    Event.GLASSES_ON: (PetState.EXCITED, "观测体给双眼加装了两片镜片。"),
+    Event.GLASSES_OFF: (PetState.CURIOUS, "观测体卸下了眼前的镜片。"),
     Event.UNKNOWN: (PetState.CONFUSED, "记录到尚未理解的行为。"),
 }
 

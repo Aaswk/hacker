@@ -66,6 +66,16 @@ ALLOWED_EVENTS = frozenset(
         EVENT_STRETCHING,
         EVENT_PERSON_LEFT,
         EVENT_PERSON_RETURNED,
+        "HAND_RAISE",
+        "ARMS_OUT",
+        "SMILING",
+        "MOUTH_OPEN",
+        "PHONE_HELD_LONG",
+        "HEAD_TOUCH",
+        "EYE_TOUCH",
+        "HANDS_TOGETHER",
+        "GLASSES_ON",
+        "GLASSES_OFF",
         EVENT_UNKNOWN,
     }
 )

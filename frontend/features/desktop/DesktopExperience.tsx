@@ -8,11 +8,9 @@ import "animal-island-ui/style";
 
 import { PetDock } from "@/components/PetDock/PetDock";
 import {
-  blobToDataUrl,
   pickInsufficientLine,
   SPECIES_CARD_MIN_OBSERVATIONS,
 } from "@/components/SpeciesCard/archive";
-import { captureFrame } from "@/features/camera/capture";
 import { useFrameReporter } from "@/features/camera/useFrameReporter";
 import { PermissionGate } from "@/features/desktop/PermissionGate";
 import { useCamera } from "@/hooks/useCamera";
@@ -69,17 +67,10 @@ export function DesktopExperience() {
   const [guideLeaving, setGuideLeaving] = useState(false);
   const [guideMounted, setGuideMounted] = useState(true);
 
-  const [bubblesHidden, setBubblesHidden] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
-  const [snapshot, setSnapshot] = useState<string | null>(null);
-  /** 档案照是否已被 AI 动漫化重绘（/api/cartoon 成功后置真） */
-  const [snapshotCartoon, setSnapshotCartoon] = useState(false);
-  /** 抓拍后、重绘结果回来前：照片区显示「重绘中」，绝不先闪一张原图 */
-  const [snapshotPending, setSnapshotPending] = useState(false);
-
   /* Step 5：进入后才开始轮询 B 的 /observations */
-  const pet = usePetState({ enabled: entered, intervalMs: 2000 });
+  const pet = usePetState({ enabled: entered });
   // 解构出稳定引用：pet 每次渲染都是新对象，不能直接进 effect deps
   const push = pet.push;
 
@@ -163,7 +154,7 @@ export function DesktopExperience() {
     0,
   );
 
-  /* 🧬 入口：样本不足 → 桌宠怼一句；足够 → 敲键盘 + 抓拍 + 浮现档案 */
+  /* 记录达到门槛后显示物种档案 */
   const openSpeciesCard = useCallback(() => {
     if (archiveCount < SPECIES_CARD_MIN_OBSERVATIONS) {
       push(
@@ -175,59 +166,8 @@ export function DesktopExperience() {
       return;
     }
     push("discover", "正在比对全部观察记录，生成物种档案…", "THINKING", "ambient");
-    setSnapshot(null);
-    setSnapshotCartoon(false);
-    setSnapshotPending(false);
-    void startCamera();
     window.setTimeout(() => setCardOpen(true), 1400);
-  }, [archiveCount, push, startCamera]);
-
-  /* 卡片浮现且摄像头就绪时抓一帧，作为物种卡的现场照片。
-     时序：抓拍成功 → 立刻切到「重绘中」占位 → /api/cartoon 回来一次性显示最终图。
-     不再先闪原图再替换；只有重绘失败时才退回原图，保证现场永远有画面。
-     /api/cartoon 内部只有 AnimeGANv2(C 的 8002) 一个引擎：成功用动漫图，失败保留抓拍原图。 */
-  useEffect(() => {
-    if (!cardOpen || cameraStatus !== "ready") return;
-    let cancelled = false;
-    const t = window.setTimeout(() => {
-      void (async () => {
-        let url = "";
-        try {
-          const blob = await captureFrame(videoRef.current);
-          url = await blobToDataUrl(blob);
-        } catch {
-          return; // 抓拍失败就保留占位框，不影响物种卡本身
-        }
-        if (!url || cancelled) return;
-
-        setSnapshotPending(true);
-        try {
-          const res = await fetch("/api/cartoon", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            // data URL 去掉前缀，只传纯 base64
-            body: JSON.stringify({ image: url.slice(url.indexOf(",") + 1), mime: "image/jpeg" }),
-          });
-          const data = (await res.json()) as { ok: boolean; image?: string; mime?: string };
-          if (cancelled) return;
-          if (data.ok && data.image) {
-            setSnapshot(`data:${data.mime ?? "image/jpeg"};base64,${data.image}`);
-            setSnapshotCartoon(true);
-          } else {
-            setSnapshot(url); // 重绘失败 → 退回抓拍原图
-          }
-        } catch {
-          if (!cancelled) setSnapshot(url); // 网络异常 → 退回原图
-        } finally {
-          if (!cancelled) setSnapshotPending(false);
-        }
-      })();
-    }, 260);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-    };
-  }, [cardOpen, cameraStatus, videoRef]);
+  }, [archiveCount, push]);
 
   return (
     <main
@@ -261,7 +201,7 @@ export function DesktopExperience() {
       )}
 
       {/* 首次引导：一句提示，不超过一行 */}
-      {entered && guideMounted && (
+      {entered && guideMounted && pet.promptsEnabled && (
         <div className="pointer-events-none absolute inset-x-0 top-8 z-10 flex justify-center">
           <div
             className="dk-guide rounded-full px-5 py-2 text-[13px]"
@@ -286,8 +226,8 @@ export function DesktopExperience() {
           queue={pet.queue}
           onDismiss={pet.dismiss}
           onPoke={pet.onPetClick}
-          bubblesHidden={bubblesHidden}
-          onToggleBubbles={() => setBubblesHidden((v) => !v)}
+          promptsEnabled={pet.promptsEnabled}
+          onTogglePrompts={pet.togglePrompts}
           actions={
             <>
               <Button
@@ -304,7 +244,7 @@ export function DesktopExperience() {
                 title={
                   archiveCount >= SPECIES_CARD_MIN_OBSERVATIONS
                     ? "生成 观测体 №001 物种卡"
-                    : `样本不足，记录员拒绝立案（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
+                    : `继续累积观察记录即可生成物种卡（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
                 }
                 onClick={openSpeciesCard}
               >
@@ -363,9 +303,6 @@ export function DesktopExperience() {
       <SpeciesCardDialog
         open={cardOpen}
         onClose={() => setCardOpen(false)}
-        snapshot={snapshot}
-        snapshotCartoon={snapshotCartoon}
-        snapshotPending={snapshotPending}
       />
     </main>
   );

@@ -25,6 +25,16 @@ const NARRATIVE = {
   STRETCHING: ["ALERT", "目标正在扩大身体面积，原因有待观察。"],
   PERSON_LEFT: ["ALERT", "观察对象离开了视野。"],
   PERSON_RETURNED: ["EXCITED", "观测体 №001 再次出现。"],
+  HAND_RAISE: ["CURIOUS", "观测体举起一只手，疑似正在申请发言。"],
+  ARMS_OUT: ["ALERT", "观测体展开双臂，正在测量自身翼展。"],
+  SMILING: ["EXCITED", "观测体嘴角上扬，记录一次微笑。"],
+  MOUTH_OPEN: ["CURIOUS", "观测体持续张开嘴部，暂未确认用途。"],
+  PHONE_HELD_LONG: ["ALERT", "观测体已持续拿着便携发光板，建议放下手机休息一下。"],
+  HEAD_TOUCH: ["CURIOUS", "观测体把手放到头顶，正在触碰头部。"],
+  EYE_TOUCH: ["CURIOUS", "观测体的手靠近眼周，记录一次眼周接触动作。"],
+  HANDS_TOGETHER: ["CURIOUS", "观测体在身前合拢双手，暂时无法解读这个信号。"],
+  GLASSES_ON: ["EXCITED", "观测体给双眼加装了两片镜片。"],
+  GLASSES_OFF: ["CURIOUS", "观测体卸下了眼前的镜片。"],
   UNKNOWN: ["CONFUSED", "记录到尚未理解的行为。"],
 };
 

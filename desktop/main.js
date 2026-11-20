@@ -36,6 +36,7 @@ const RELOAD_COOLDOWN_MS = 10000;
 const PET_URL = process.env.PET_URL || "http://localhost:3000/pet";
 
 const IS_MAC = process.platform === "darwin";
+const IS_WINDOWS = process.platform === "win32";
 /** 显示器变化后重排窗口的防抖时长（插拔 / 改分辨率会连发多次事件） */
 const REFIT_DEBOUNCE_MS = 250;
 
@@ -47,6 +48,8 @@ let hitTimer = null;
 let refitTimer = null;
 /** 渲染进程上报的命中区域（窗口内 CSS 像素）；与窗口 bounds 相加即屏幕坐标 */
 let hitRects = [];
+let paintRects = [];
+let shapeKey = "";
 /** 当前是否整窗穿透；null = 尚未向系统设置过 */
 let ignoring = null;
 /** 是否正在「长按拖动桌宠」：拖动期间保持可交互，指针甩出桌宠也不丢事件 */
@@ -95,6 +98,8 @@ function fitToDisplay(reason) {
   const b = win.getBounds();
   if (b.x !== a.x || b.y !== a.y || b.width !== a.width || b.height !== a.height) {
     win.setBounds({ x: a.x, y: a.y, width: a.width, height: a.height });
+    shapeKey = "";
+    updateWindowsShape();
   }
   console.log(
     `[pet] ${reason} → 铺满 ${a.width}×${a.height} @${a.x},${a.y}（缩放 ${d.scaleFactor}x）`,
@@ -127,6 +132,7 @@ function createWindow() {
   const area = targetDisplay().workArea;
 
   win = new BrowserWindow({
+    title: "人类观察站 · 桌宠",
     width: area.width,
     height: area.height,
     x: area.x,
@@ -155,8 +161,10 @@ function createWindow() {
   applyPlatformTweaks();
 
   // 默认整窗穿透；命中与否交给主进程轮询光标（见 startHitTracking）
+  ignoring = null;
+  shapeKey = "";
   setIgnore(true);
-  startHitTracking();
+  if (!IS_WINDOWS) startHitTracking();
 
   // showInactive：桌宠浮出来时不抢当前 App 的焦点（正在打字 / 看视频不被打断）
   win.once("ready-to-show", () => {
@@ -175,6 +183,9 @@ function createWindow() {
   // 页面重载后旧的命中矩形作废，先清空，等渲染进程重新上报
   win.webContents.on("did-start-loading", () => {
     hitRects = [];
+    paintRects = [];
+    dragging = false;
+    updateWindowsShape();
   });
 
   // 渲染进程崩溃 / 卡死时自愈，避免留下一个「碰不到也拖不动」的幽灵窗口
@@ -214,6 +225,30 @@ function setIgnore(next) {
   else win.setIgnoreMouseEvents(false);
 }
 
+function updateWindowsShape() {
+  if (!IS_WINDOWS || !win || win.isDestroyed()) return;
+  const { width, height } = win.getContentBounds();
+  const rectangles = dragging ? [{ x: 0, y: 0, width, height }]
+    : [...hitRects, ...paintRects].flatMap((rect) => {
+      const pad = 12;
+      const x = Math.max(0, Math.floor(rect.left - pad));
+      const y = Math.max(0, Math.floor(rect.top - pad));
+      const right = Math.min(width, Math.ceil(rect.left + rect.width + pad));
+      const bottom = Math.min(height, Math.ceil(rect.top + rect.height + pad));
+      return right > x && bottom > y ? [{ x, y, width: right - x, height: bottom - y }] : [];
+    });
+  if (!rectangles.length) {
+    setIgnore(true);
+    return;
+  }
+  const key = JSON.stringify(rectangles);
+  if (key !== shapeKey) {
+    win.setShape(rectangles);
+    shapeKey = key;
+  }
+  setIgnore(false);
+}
+
 /**
  * 主进程自持的命中判定：每 HIT_INTERVAL_MS 读一次光标屏幕坐标，
  * 与「窗口 bounds + 渲染进程上报的窗口内矩形」比对。
@@ -247,8 +282,8 @@ function stopHitTracking() {
 }
 
 /* 渲染进程上报「哪些区域算桌宠」：窗口内 CSS 像素的矩形数组 */
-ipcMain.on("pet:hit-rects", (_e, rects) => {
-  hitRects = Array.isArray(rects)
+function validRects(rects) {
+  return Array.isArray(rects)
     ? rects
       .filter(
         (r) =>
@@ -262,14 +297,26 @@ ipcMain.on("pet:hit-rects", (_e, rects) => {
       )
       .slice(0, 8)
     : [];
+}
+
+ipcMain.on("pet:hit-rects", (event, rects, visuals) => {
+  if (event.sender !== win?.webContents) return;
+  hitRects = validRects(rects);
+  paintRects = validRects(visuals);
+  updateWindowsShape();
 });
 
 /* 长按拖动桌宠：窗口本身不动（已铺满屏），主进程只负责在拖动期间别穿透 */
-ipcMain.on("pet:drag-start", () => {
+ipcMain.on("pet:drag-start", (event) => {
+  if (event.sender !== win?.webContents) return;
   dragging = true;
+  setIgnore(false);
+  updateWindowsShape();
 });
-ipcMain.on("pet:drag-end", () => {
+ipcMain.on("pet:drag-end", (event) => {
+  if (event.sender !== win?.webContents) return;
   dragging = false;
+  updateWindowsShape();
 });
 
 ipcMain.on("pet:quit", () => {

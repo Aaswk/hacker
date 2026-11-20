@@ -8,7 +8,7 @@
 * **配置全部走环境变量**，禁止把 key 写进代码：
       VLM_API_KEY    必填，没有它就无法调用（抛 :class:`VlmConfigError`）
       VLM_BASE_URL   默认 https://dashscope.aliyuncs.com/compatible-mode/v1
-      VLM_MODEL      默认 qwen-vl-plus
+      VLM_MODEL      默认 qwen3-vl-plus
       VLM_TIMEOUT    默认 15.0 秒
 * **把失败分类成异常**，方便上层区分「配置缺失 / 网络请求失败 / 返回内容
   不是合法 JSON」，从而决定怎么降级，而不是整个主循环崩掉。
@@ -30,7 +30,7 @@ from typing import Optional, Sequence
 #: 未显式配置时的默认地址（OpenAI 兼容模式，DashScope / 通义千问）
 DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 #: 未显式配置时的默认模型
-DEFAULT_MODEL = "qwen-vl-plus"
+DEFAULT_MODEL = "qwen3-vl-plus"
 #: 未显式配置时的默认超时（秒）
 DEFAULT_TIMEOUT = 15.0
 

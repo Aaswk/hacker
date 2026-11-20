@@ -67,7 +67,7 @@ const TONE: Record<BubbleTone, ToneSpec> = {
     chipFg: "#241c14",
   },
   alert: {
-    label: "警戒",
+    label: "观察提示",
     bg: "#FFE1D3",
     edge: "#8f3016",
     fg: "#3a1408",
@@ -246,8 +246,8 @@ function BubbleCard({
 export function ObservationBubble({
   items,
   onDismiss,
-  speed = 42,
-  holdMs = 2600,
+  speed = 22,
+  holdMs = 1800,
   className,
 }: ObservationBubbleProps) {
   useInjectedStyle();
@@ -288,8 +288,8 @@ export interface AnchoredObservationBubbleProps extends ObservationBubbleProps {
 function AnchoredCard({
   item,
   onDismiss,
-  speed = 42,
-  holdMs = 2600,
+  speed = 22,
+  holdMs = 1800,
   anchor,
   placement,
   muted,
@@ -335,8 +335,8 @@ function AnchoredCard({
 export function AnchoredObservationBubble({
   items,
   onDismiss,
-  speed = 42,
-  holdMs = 2600,
+  speed = 22,
+  holdMs = 1800,
   anchor,
   placement,
   muted,

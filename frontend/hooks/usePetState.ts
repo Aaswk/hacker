@@ -40,13 +40,13 @@ const STATE_TONE: Record<PetState, BubbleTone> = {
 export interface UsePetStateOptions {
   /** 是否开始轮询 B 的 GET /observations；默认 false（Step 9 才由「开始观察」打开） */
   enabled?: boolean;
-  /** 轮询间隔，默认 2000ms（对齐 B 段约定） */
+  /** 轮询间隔，默认 500ms */
   intervalMs?: number;
 }
 
 export function usePetState({
   enabled = false,
-  intervalMs = 2000,
+  intervalMs = 500,
 }: UsePetStateOptions = {}) {
   const behavior = usePetBehavior();
   const { push } = behavior;

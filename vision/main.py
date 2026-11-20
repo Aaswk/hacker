@@ -29,6 +29,7 @@ import time
 import cv2
 
 from .drinking_vlm_detector import DrinkingVlmDetector
+from .extra_behaviors import ExtraBehaviors
 from .event_manager import EventManager
 from .event_sender import ENV_BACKEND_BASE_URL, BackendConfig
 from .pose_detector import DEFAULT_MODEL_PATH, NUM_LANDMARKS, PoseDetector
@@ -46,6 +47,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="摄像头实时人体姿态检测 + 人物进出检测 + 伸展检测 + 喝水检测（调试用）",
     )
+    parser.add_argument("--phone-seconds", type=float, default=60.0, help="持续手持手机多久后提醒（秒）")
+    parser.add_argument("--cloud-drinking", action="store_true", help="允许把疑似喝水的摄像头关键帧发给配置的云端 VLM")
     parser.add_argument("--camera", type=int, default=0, help="摄像头编号，默认 0")
     parser.add_argument(
         "--source",
@@ -180,11 +183,10 @@ def main(argv: list[str] | None = None) -> int:
             "              把 VLM_API_KEY 写进项目根目录 .env，或 export 到环境变量；"
             "详见 .env.example"
         )
-    print(
-        f"  喝水检测  : Pose 疑似连续 {args.drink_trigger_frames} 帧 → 截 "
-        f"{args.drink_keyframes} 张关键帧 → VLM / 冷却 {args.drink_cooldown:g}s"
-    )
-    print(f"  VLM       : {vlm_line}")
+    if args.cloud_drinking:
+        print(f"  喝水检测  : 云端关键帧裁决 | {vlm_line}")
+    else:
+        print("  喝水检测  : 本地识别杯子或瓶子靠近嘴部")
     backend = BackendConfig.from_env()
     if backend.is_configured:
         backend_line = f"POST {backend.events_url}"
@@ -258,12 +260,14 @@ def _loop(camera: VideoSource, detector: PoseDetector, args: argparse.Namespace)
         trigger_distance=args.drink_trigger_distance,
         aspect_ratio=camera_aspect,
         keyframes=args.drink_keyframes,
-    )
+    ) if args.cloud_drinking else None
 
     # Stage 1 末段新增：统一事件管理器，把识别结果转成协议 JSON 并异步上报。
     # 内部用 EventSender（后台 daemon 线程），未配置 BACKEND_BASE_URL 时只打印
     # 日志、不发送，也不会影响下面主循环。
     event_manager = EventManager()
+
+    extra_behaviors = ExtraBehaviors(args.phone_seconds, local_drinking=not args.cloud_drinking)
 
     frame_count = 0
     fps = 0.0
@@ -297,7 +301,7 @@ def _loop(camera: VideoSource, detector: PoseDetector, args: argparse.Namespace)
             # 注意要传原始帧（截关键帧用）；VLM 在后台线程跑，这里不阻塞。
             # verdict 可能是 NONE（含 VLM 调用失败的 NONE），只有确认为
             # DRINKING 才会由 EventManager 发事件。
-            verdict = drinking.update(frame, result)
+            verdict = drinking.update(frame, result) if drinking is not None else None
             if verdict is not None and verdict.is_drinking:
                 print(
                     f"[Drinking] {verdict.action} "
@@ -311,6 +315,11 @@ def _loop(camera: VideoSource, detector: PoseDetector, args: argparse.Namespace)
             event_manager.handle_stretching(stretching_event)
             event_manager.handle_drinking(verdict)
 
+            pose = result.poses[0] if result.poses else None
+            behavior_time = time.monotonic()
+            for event in extra_behaviors.update(frame, pose, behavior_time):
+                event_manager.emit(event)
+
             annotated = draw_pose_debug(
                 frame,
                 result,
@@ -318,6 +327,7 @@ def _loop(camera: VideoSource, detector: PoseDetector, args: argparse.Namespace)
                 draw_labels=args.debug_labels,
             )
 
+            extra_behaviors.draw_status(annotated, behavior_time)
             cv2.imshow(WINDOW_NAME, annotated)
             if args.show_raw:
                 cv2.imshow("raw", frame)
@@ -336,6 +346,7 @@ def _loop(camera: VideoSource, detector: PoseDetector, args: argparse.Namespace)
                 return 0
     finally:
         # 退出前把后台队列里的事件尽量发完，避免丢事件
+        extra_behaviors.close()
         event_manager.close()
 
 

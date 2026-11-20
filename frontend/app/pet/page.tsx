@@ -54,13 +54,11 @@ const SpeciesCardDialog = dynamic(
 );
 
 export default function PetDesktopPage() {
-  /** 右键菜单：隐藏气泡后不再弹气泡，只默默记录（队列照常走） */
-  const [bubblesHidden, setBubblesHidden] = useState(false);
   /** 📓 日志 / 🧬 物种卡：小窗内就地弹出 */
   const [logOpen, setLogOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
 
-  const pet = usePetState({ enabled: true, intervalMs: 2000 });
+  const pet = usePetState({ enabled: true });
   const { push } = pet;
 
   /* 指针穿透：上报 [data-pet-hit] 的窗口内矩形，主进程据此轮询光标决定穿透 */
@@ -94,19 +92,23 @@ export default function PetDesktopPage() {
             }
           });
       }
-      const key = JSON.stringify(rects);
+      const visuals = Array.from(pet.promptsEnabled ? document.querySelectorAll<HTMLElement>(".fukidashi-motion") : []).map((el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, top: r.top, width: r.width, height: r.height };
+      });
+      const key = JSON.stringify([rects, visuals]);
       if (key === last) return;
       last = key;
-      api.setHitRects(rects);
+      api.setHitRects(rects, visuals);
     };
 
     report();
-    const id = window.setInterval(report, 120);
+    const id = window.setInterval(report, 32);
     return () => {
       window.clearInterval(id);
       api.setHitRects([]);
     };
-  }, [logOpen, cardOpen]);
+  }, [logOpen, cardOpen, pet.promptsEnabled]);
 
   /* 物种卡档案：文案只来自 B 的 summary；累计条数决定能否立案 */
   const [card, setCard] = useState<SpeciesCardData | null>(null);
@@ -160,8 +162,8 @@ export default function PetDesktopPage() {
         queue={pet.queue}
         onDismiss={pet.dismiss}
         onPoke={pet.onPetClick}
-        bubblesHidden={bubblesHidden}
-        onToggleBubbles={() => setBubblesHidden((v) => !v)}
+        promptsEnabled={pet.promptsEnabled}
+        onTogglePrompts={pet.togglePrompts}
         actions={
           <>
             <Button
@@ -178,7 +180,7 @@ export default function PetDesktopPage() {
               title={
                 archiveCount >= SPECIES_CARD_MIN_OBSERVATIONS
                   ? "生成 观测体 №001 物种卡"
-                  : `样本不足，记录员拒绝立案（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
+                  : `继续累积观察记录即可生成物种卡（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
               }
               onClick={openSpeciesCard}
             >
@@ -196,7 +198,7 @@ export default function PetDesktopPage() {
         subjectId="HUMAN_001"
       />
 
-      {/* 观测体 №001 物种卡（无抓拍，渲染占位框） */}
+      {/* 观测体 №001 物种卡 */}
       <SpeciesCardDialog open={cardOpen} onClose={() => setCardOpen(false)} />
     </main>
   );

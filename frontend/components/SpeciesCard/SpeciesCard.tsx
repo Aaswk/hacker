@@ -33,16 +33,6 @@ const INK = "#725d42";
 const INK_SOFT = "#8a7b66";
 const FAINT = "#a8987d";
 
-/** 档案照区：重绘中的扫描光带动画（配合 snapshotPending） */
-const PHOTO_CSS = `
-@keyframes sc-scan {
-  0%   { transform: translateY(-110%); }
-  100% { transform: translateY(260%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sc-scanbar { animation: none !important; opacity: .3; }
-}`;
-
 /** 仪式节奏：六段依次落定，前一段稳了再出下一段 */
 const STEP = { TITLE: 1, FIELDS: 2, STARS: 3, COUNT: 4, NOTE: 5, SEAL: 6 } as const;
 
@@ -69,21 +59,21 @@ const BEHAVIOR_LABEL: Record<
     emoji: "💧",
     tag: "app-teal",
     color: "#2f9e8f",
-    note: "摄入频率偏高。我们暂时无法阻止它。",
+    note: "液体补给已记录。记录员也举起了自己的小水杯。",
   },
   STRETCHING: {
     name: "躯体拉伸",
     emoji: "🧘",
     tag: "app-green",
     color: "#3f9d54",
-    note: "动作无威胁性。已列入低优先事项。",
+    note: "舒展一下。记录员也抻了抻小爪子。",
   },
   PERSON_LEFT: {
     name: "个体离场",
     emoji: "🚶",
     tag: "app-orange",
     color: "#d4823a",
-    note: "疑似畏罪潜逃。未携带任何物品。",
+    note: "暂时离开观察窗。书签已夹好，随时可以回来。",
   },
   PERSON_ENTER: {
     name: "个体入场",
@@ -97,7 +87,77 @@ const BEHAVIOR_LABEL: Record<
     emoji: "🔄",
     tag: "app-blue",
     color: "#4a86c9",
-    note: "去而复返。动机不明，不予置评。",
+    note: "欢迎回来，记录本正翻到上一页。",
+  },
+  HAND_RAISE: {
+    name: "举单手",
+    emoji: "✋",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体举起一只手，疑似正在申请发言。",
+  },
+  ARMS_OUT: {
+    name: "双臂平举",
+    emoji: "🪽",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体展开双臂，正在测量自身翼展。",
+  },
+  SMILING: {
+    name: "微笑",
+    emoji: "🙂",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体嘴角上扬，记录一次微笑。",
+  },
+  MOUTH_OPEN: {
+    name: "持续张嘴",
+    emoji: "😮",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体持续张开嘴部，暂未确认用途。",
+  },
+  PHONE_HELD_LONG: {
+    name: "持续手持手机",
+    emoji: "📱",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体已持续拿着便携发光板，建议放下手机休息一下。",
+  },
+  HEAD_TOUCH: {
+    name: "摸头／挠头",
+    emoji: "🤚",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体把手放到头顶，正在触碰头部。",
+  },
+  EYE_TOUCH: {
+    name: "触碰眼周",
+    emoji: "👁️",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体的手靠近眼周，记录一次眼周接触动作。",
+  },
+  HANDS_TOGETHER: {
+    name: "双手合拢",
+    emoji: "🙏",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体在身前合拢双手，暂时无法解读这个信号。",
+  },
+  GLASSES_ON: {
+    name: "戴上眼镜",
+    emoji: "👓",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体给双眼加装了两片镜片。",
+  },
+  GLASSES_OFF: {
+    name: "摘下眼镜",
+    emoji: "👓",
+    tag: "app-teal",
+    color: "#2f9e8f",
+    note: "观测体卸下了眼前的镜片。",
   },
   UNKNOWN: {
     name: "未归类行为",
@@ -117,20 +177,11 @@ function stars(count: number): number {
 export interface SpeciesCardProps {
   open: boolean;
   onClose: () => void;
-  /** 打开时抓拍的人物照片（data URL）；没有就渲染占位框 */
-  snapshot?: string | null;
-  /** 抓拍已由 AI 动漫化重绘（成功后照片角标亮起） */
-  snapshotCartoon?: boolean;
-  /** 已抓拍、重绘结果还没回来：显示「重绘中」占位，避免先闪一张原图 */
-  snapshotPending?: boolean;
 }
 
 export function SpeciesCard({
   open,
   onClose,
-  snapshot,
-  snapshotCartoon,
-  snapshotPending,
 }: SpeciesCardProps) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<SpeciesCardData | null>(null);
@@ -180,8 +231,8 @@ export function SpeciesCard({
   );
 
   const counts = data?.event_counts ?? {};
-  const threatStars = stars(
-    (counts.PERSON_LEFT ?? 0) + (counts.PERSON_ENTER ?? 0) + (counts.UNKNOWN ?? 0),
+  const arrivalStars = stars(
+    (counts.PERSON_LEFT ?? 0) + (counts.PERSON_ENTER ?? 0) + (counts.PERSON_RETURNED ?? 0),
   );
   const activityStars = stars(
     (counts.STRETCHING ?? 0) + (counts.PERSON_RETURNED ?? 0) + (counts.PERSON_ENTER ?? 0),
@@ -223,7 +274,6 @@ export function SpeciesCard({
       }
     >
       <div style={{ width: "100%", fontSize: 13, lineHeight: 1.6, color: INK_SOFT }}>
-        <style>{PHOTO_CSS}</style>
         <div
           style={{
             position: "relative",
@@ -252,103 +302,7 @@ export function SpeciesCard({
               观测体 №001
             </div>
             <div style={{ marginTop: 6, fontSize: 11, color: INK_SOFT }}>
-              观测状态：持续监视 · 本卷宗由记录员自动生成，观测对象并不知情
-            </div>
-          </div>
-
-          {/* ---- 抓拍照片 ---- */}
-          <div style={reveal(STEP.FIELDS)}>
-            <div
-              style={{
-                position: "relative",
-                width: "100%",
-                aspectRatio: "4 / 3",
-                borderRadius: 16,
-                overflow: "hidden",
-                border: "2px dashed #d4c4a8",
-                background: "rgba(255,255,255,0.5)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {snapshot ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={snapshot}
-                  alt="观测体 №001 抓拍"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    // 动漫化结果是 512×512 正方形，压进 4:3 时偏上取景，别把脸裁掉
-                    objectPosition: "center 32%",
-                    transform: "scaleX(-1)",
-                  }}
-                />
-              ) : snapshotPending ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 4,
-                    color: INK_SOFT,
-                  }}
-                >
-                  <span style={{ fontSize: 26 }}>🎨</span>
-                  <span style={{ fontSize: 11, letterSpacing: "0.2em" }}>影像重绘中</span>
-                  <span style={{ fontSize: 11, color: FAINT }}>正在以动漫风格重建该个体</span>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 4,
-                    color: FAINT,
-                  }}
-                >
-                  <span style={{ fontSize: 26 }}>📷</span>
-                  <span style={{ fontSize: 11, letterSpacing: "0.2em" }}>无影像记录</span>
-                  <span style={{ fontSize: 11 }}>对象未配合采集</span>
-                </div>
-              )}
-              {/* 重绘中：一道扫描光带自上而下掠过，明确「在处理」而不是卡住 */}
-              {snapshotPending ? (
-                <span
-                  className="sc-scanbar"
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    height: "42%",
-                    pointerEvents: "none",
-                    background:
-                      "linear-gradient(180deg, rgba(232,167,43,0) 0%, rgba(232,167,43,0.30) 50%, rgba(232,167,43,0) 100%)",
-                    animation: "sc-scan 1.5s linear infinite",
-                  }}
-                />
-              ) : null}
-              {snapshotCartoon ? (
-                <span
-                  style={{
-                    position: "absolute",
-                    right: 8,
-                    bottom: 8,
-                    padding: "2px 9px",
-                    borderRadius: 999,
-                    background: "rgba(114,93,66,0.82)",
-                    color: "#f7f1e3",
-                    fontSize: 10,
-                    letterSpacing: "0.14em",
-                  }}
-                >
-                  ✨ AI 动漫化重绘
-                </span>
-              ) : null}
+              档案由本次观察记录自动生成
             </div>
           </div>
 
@@ -356,15 +310,15 @@ export function SpeciesCard({
           <Card type="dashed" style={{ ...reveal(STEP.FIELDS), padding: "14px 18px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               <FieldRow label="物种" value="疑似人类（待定）" />
-              <FieldRow label="威胁等级" stars={threatStars} revealAt={STEP.STARS} step={step} />
+              <FieldRow label="出入记录" stars={arrivalStars} revealAt={STEP.STARS} step={step} />
               <FieldRow
-                label="活跃等级"
+                label="活动记录"
                 stars={activityStars}
                 revealAt={STEP.STARS}
                 step={step}
               />
               <FieldRow
-                label="水合水平"
+                label="饮水记录"
                 stars={hydrationStars}
                 revealAt={STEP.STARS}
                 step={step}
@@ -392,7 +346,7 @@ export function SpeciesCard({
 
             {behaviors.length === 0 ? (
               <p style={{ fontSize: 12, color: FAINT }}>
-                暂无行为样本。该对象目前表现平庸。
+                暂时还没有行为记录。小本子已经翻开了。
               </p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -461,7 +415,7 @@ export function SpeciesCard({
               记录员手记
             </div>
             <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: INK }}>
-              {data?.summary ? data.summary : "记录员拒绝就本次观测发表任何结论。"}
+              {data?.summary ? data.summary : "这页暂时留白，等新的观察记录来填上。"}
             </p>
             {error ? (
               <p style={{ marginTop: 8, fontSize: 11, color: "#c0392b" }}>

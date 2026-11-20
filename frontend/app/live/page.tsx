@@ -6,12 +6,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ObservationBubble } from "@/components/ObservationBubble/ObservationBubble";
 import { Pet } from "@/components/Pet/Pet";
 import {
-  blobToDataUrl,
   pickInsufficientLine,
   SPECIES_CARD_MIN_OBSERVATIONS,
 } from "@/components/SpeciesCard/archive";
-import { captureFrame } from "@/features/camera/capture";
-import { useCamera } from "@/hooks/useCamera";
 import { usePetState } from "@/hooks/usePetState";
 import { ApiError, api } from "@/lib/api";
 import {
@@ -60,29 +57,29 @@ const EVENT_LABEL: Record<HumanEventType, string> = {
   STRETCHING: "伸懒腰",
   PERSON_LEFT: "离开",
   PERSON_RETURNED: "回来",
+  HAND_RAISE: "举单手",
+  ARMS_OUT: "双臂平举",
+  SMILING: "微笑",
+  MOUTH_OPEN: "持续张嘴",
+  PHONE_HELD_LONG: "持续手持手机",
+  HEAD_TOUCH: "摸头／挠头",
+  EYE_TOUCH: "触碰眼周",
+  HANDS_TOGETHER: "双手合拢",
+  GLASSES_ON: "戴上眼镜",
+  GLASSES_OFF: "摘下眼镜",
   UNKNOWN: "未知行为",
 };
 
 export default function LivePage() {
   /* Step 5：状态映射层。enabled=true 即开始轮询 B 的 /observations */
   const [watching, setWatching] = useState(false);
-  const pet = usePetState({ enabled: watching, intervalMs: 2000 });
+  const pet = usePetState({ enabled: watching });
 
   /* Step 6：桌宠旁边的 📓 打开观察日志抽屉 */
   const [logOpen, setLogOpen] = useState(false);
 
-  /* Step 7：🧬 物种卡。先敲键盘 → 抓拍 → 浮现卡片 */
+  /* Step 7：物种卡 */
   const [cardOpen, setCardOpen] = useState(false);
-  const [snapshot, setSnapshot] = useState<string | null>(null);
-  // 只在用户点击时才请求权限，避免进页面就弹摄像头
-  const camera = useCamera({ autoStart: false });
-  const {
-    start: startCamera,
-    status: cameraStatus,
-    attachVideo: attachCameraVideo,
-    videoRef: cameraVideoRef,
-  } = camera;
-
   /* 物种卡档案：文案只来自 B 的 summary 字段；累计条数决定能否立案 */
   const [card, setCard] = useState<SpeciesCard | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
@@ -123,32 +120,9 @@ export default function LivePage() {
       return;
     }
     pet.push("discover", "正在比对全部观察记录，生成物种档案…", "THINKING", "ambient");
-    setSnapshot(null);
-    void startCamera();
     // 先让桌宠敲一会儿键盘，再把档案推到台前
     window.setTimeout(() => setCardOpen(true), 1400);
-  }, [archiveCount, pet, startCamera]);
-
-  /* 卡片浮现且摄像头就绪时抓一帧，作为物种卡的现场照片 */
-  useEffect(() => {
-    if (!cardOpen || cameraStatus !== "ready") return;
-    let cancelled = false;
-    const t = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const blob = await captureFrame(cameraVideoRef.current);
-          const url = await blobToDataUrl(blob);
-          if (!cancelled) setSnapshot(url);
-        } catch {
-          /* 抓拍失败就保留占位框，不影响物种卡本身 */
-        }
-      })();
-    }, 260);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-    };
-  }, [cardOpen, cameraStatus, cameraVideoRef]);
+  }, [archiveCount, pet]);
 
   /* 联调用：直接 POST /events 造一条，用来代替 C 的识别结果（注意会写入 B 的库） */
   const [event, setEvent] = useState<HumanEventType>("DRINKING");
@@ -250,7 +224,7 @@ export default function LivePage() {
                 title={
                   canOpenSpeciesCard
                     ? "生成物种卡（Step 7）"
-                    : `样本不足，记录员拒绝立案（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
+                    : `继续累积观察记录即可生成物种卡（${archiveCount}/${SPECIES_CARD_MIN_OBSERVATIONS}）`
                 }
                 className={
                   "rounded-full border px-3 py-1.5 text-xs transition-colors " +
@@ -368,7 +342,7 @@ export default function LivePage() {
                     <div className="mt-1 text-zinc-500">
                       {canOpenSpeciesCard
                         ? "样本量已达标，记录员同意立案。"
-                        : `样本不足，记录员拒绝立案。还差 ${SPECIES_CARD_MIN_OBSERVATIONS - archiveCount
+                        : `继续累积观察记录即可生成物种卡。还差 ${SPECIES_CARD_MIN_OBSERVATIONS - archiveCount
                         } 次观察。`}
                     </div>
                   </div>
@@ -413,23 +387,8 @@ export default function LivePage() {
       <SpeciesCardDialog
         open={cardOpen}
         onClose={() => setCardOpen(false)}
-        snapshot={snapshot}
       />
 
-      {/* 抓拍用的隐藏预览：元素保持挂载，流才不断（Step 2 截帧依赖这一点） */}
-      <video
-        ref={attachCameraVideo}
-        muted
-        autoPlay
-        playsInline
-        style={{
-          position: "absolute",
-          width: 1,
-          height: 1,
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-      />
     </main>
   );
 }
